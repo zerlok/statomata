@@ -1,0 +1,130 @@
+[tool.poetry]
+name = "statomata"
+version = "0.1.0"
+description = " a strictly typed, flexible library for building and running state machines in Python"
+authors = ["zerlok <danil.troshnev@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+anyio = {version = "^4.8.0", optional = true}
+typing-extensions = "^4.12.2" # TODO: find a way to avoid it in runtime
+
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.15.0"
+ruff = "^0.9.10"
+pytest = "^8.3.5"
+pytest-asyncio = "^0.25.3"
+pytest-cov = "^6.0.0"
+
+
+[tool.poetry.extras]
+anyio = ["anyio"]
+
+
+[tool.ruff]
+target-version = "py39"
+include = ["src/**/*.py", "tests/**/*.py"]
+exclude = ["**_pb2.py", "**_pb2.pyi", "**_pb2_grpc.py", "**_pb2_grpc.pyi"]
+line-length = 120
+output-format = "pylint"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN", # because we use mypy
+    "D", # TODO: add docstrings to public code
+    "FA", # TODO: consider should we use __annotations__
+    "TD", # no task tracking
+    "FIX", # TODO: consider enable it against new code on pull requests
+    "A005", # TODO: wait for ruff 0.10.0
+    "COM812", # because ruff format suggests to skip it
+    "ISC001", # because ruff format suggests to skip it
+    "RET505", # clashes with mypy exhaustiveness check
+    "S101", # allow asserts for tests checks and mypy help
+    "UP007", # because python 3.9 support
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "ARG001", # it's ok to use a fixture with a side effect in a test.
+    "PT004", # fixture may add side effect and doesn't return anything.
+]
+
+
+[tool.mypy]
+files = ["src/", "tests/"]
+
+strict = true
+disallow_any_unimported = true
+disallow_any_expr = true
+disallow_any_decorated = true
+disallow_any_explicit = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_return_any = true
+warn_unreachable = true
+strict_equality = true
+strict_optional = true
+enable_error_code = [
+    "redundant-self",
+    "redundant-expr",
+    "possibly-undefined",
+    "truthy-bool",
+    "truthy-iterable",
+    "ignore-without-code",
+    "unused-awaitable",
+    "explicit-override",
+    "mutable-override",
+    "unimported-reveal",
+    "narrowed-type-not-subtype",
+]
+
+# NOTE: allow return `typing.Any` in test fixtures (e.g. mock objects created with `create_autospec`)
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_any_expr = false
+disallow_any_explicit = false
+warn_return_any = false
+
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src",
+]
+addopts = [
+    "--cov=src",
+    "--cov-report=term-missing",
+]
+testpaths = [
+    "tests",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    "if __name__ == .__main__.:",
+    "if t\\.TYPE_CHECKING:",
+    "class .*\\(t\\.Protocol\\):",
+    "@abc\\.abstractmethod",
+    "t\\.assert_never\\(.*\\)",
+]
+show_missing = true
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
