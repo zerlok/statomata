@@ -23,14 +23,14 @@ class StateMachineSubscriberRegistry(
         self.__subscribers.difference_update(subscribers)
 
     @override
-    def notify_start(self, state: S_contra) -> None:
+    def notify_started(self, state: S_contra) -> None:
         for sub in self.__subscribers:
-            sub.notify_start(state)
+            sub.notify_started(state)
 
     @override
-    def notify_state_start(self, state: S_contra, income: U_contra) -> None:
+    def notify_state_entered(self, state: S_contra, income: U_contra) -> None:
         for sub in self.__subscribers:
-            sub.notify_state_start(state, income)
+            sub.notify_state_entered(state, income)
 
     @override
     def notify_state_outcome(self, state: S_contra, income: U_contra, outcome: V_contra) -> None:
@@ -38,24 +38,24 @@ class StateMachineSubscriberRegistry(
             sub.notify_state_outcome(state, income, outcome)
 
     @override
-    def notify_state_finish(self, state: S_contra, income: U_contra) -> None:
+    def notify_state_left(self, state: S_contra, income: U_contra) -> None:
         for sub in self.__subscribers:
-            sub.notify_state_finish(state, income)
+            sub.notify_state_left(state, income)
 
     @override
-    def notify_state_error(self, state: S_contra, error: Exception) -> None:
+    def notify_state_failed(self, state: S_contra, error: Exception) -> None:
         for sub in self.__subscribers:
-            sub.notify_state_error(state, error)
+            sub.notify_state_failed(state, error)
 
     @override
-    def notify_transition(self, source: S_contra, dest: S_contra) -> None:
+    def notify_transitioned(self, source: S_contra, dest: S_contra) -> None:
         for sub in self.__subscribers:
-            sub.notify_transition(source, dest)
+            sub.notify_transitioned(source, dest)
 
     @override
-    def notify_finish(self, state: S_contra) -> None:
+    def notify_finished(self, state: S_contra) -> None:
         for sub in self.__subscribers:
-            sub.notify_finish(state)
+            sub.notify_finished(state)
 
 
 class StateMachineAsyncSubscriberRegistry(
@@ -72,18 +72,18 @@ class StateMachineAsyncSubscriberRegistry(
         self.__subscribers.difference_update(subscribers)
 
     @override
-    async def notify_start(self, state: S_contra) -> None:
+    async def notify_started(self, state: S_contra) -> None:
         if not self.__subscribers:
             return
 
-        await asyncio.gather(*(sub.notify_start(state) for sub in self.__subscribers))
+        await asyncio.gather(*(sub.notify_started(state) for sub in self.__subscribers))
 
     @override
-    async def notify_state_start(self, state: S_contra, income: U_contra) -> None:
+    async def notify_state_entered(self, state: S_contra, income: U_contra) -> None:
         if not self.__subscribers:
             return
 
-        await asyncio.gather(*(sub.notify_state_start(state, income) for sub in self.__subscribers))
+        await asyncio.gather(*(sub.notify_state_entered(state, income) for sub in self.__subscribers))
 
     @override
     async def notify_state_outcome(self, state: S_contra, income: U_contra, outcome: V_contra) -> None:
@@ -93,29 +93,29 @@ class StateMachineAsyncSubscriberRegistry(
         await asyncio.gather(*(sub.notify_state_outcome(state, income, outcome) for sub in self.__subscribers))
 
     @override
-    async def notify_state_finish(self, state: S_contra, income: U_contra) -> None:
+    async def notify_state_left(self, state: S_contra, income: U_contra) -> None:
         if not self.__subscribers:
             return
 
-        await asyncio.gather(*(sub.notify_state_finish(state, income) for sub in self.__subscribers))
+        await asyncio.gather(*(sub.notify_state_left(state, income) for sub in self.__subscribers))
 
     @override
-    async def notify_state_error(self, state: S_contra, error: Exception) -> None:
+    async def notify_state_failed(self, state: S_contra, error: Exception) -> None:
         if not self.__subscribers:
             return
 
-        await asyncio.gather(*(sub.notify_state_error(state, error) for sub in self.__subscribers))
+        await asyncio.gather(*(sub.notify_state_failed(state, error) for sub in self.__subscribers))
 
     @override
-    async def notify_transition(self, source: S_contra, dest: S_contra) -> None:
+    async def notify_transitioned(self, source: S_contra, dest: S_contra) -> None:
         if not self.__subscribers:
             return
 
-        await asyncio.gather(*(sub.notify_transition(source, dest) for sub in self.__subscribers))
+        await asyncio.gather(*(sub.notify_transitioned(source, dest) for sub in self.__subscribers))
 
     @override
-    async def notify_finish(self, state: S_contra) -> None:
+    async def notify_finished(self, state: S_contra) -> None:
         if not self.__subscribers:
             return
 
-        await asyncio.gather(*(sub.notify_finish(state) for sub in self.__subscribers))
+        await asyncio.gather(*(sub.notify_finished(state) for sub in self.__subscribers))

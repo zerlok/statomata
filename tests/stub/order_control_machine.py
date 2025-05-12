@@ -1,6 +1,4 @@
 """
-This example demonstrates how to create a traffic light machine using the statomata library.
-
 Adopted from: https://python-statemachine.readthedocs.io/en/latest/auto_examples/order_control_machine.html#sphx-glr-auto-examples-order-control-machine-py
 """
 
@@ -9,7 +7,8 @@ from dataclasses import dataclass
 
 from typing_extensions import assert_never, override
 
-from statomata.abc import Context, StateMachine
+from statomata.abc import Context
+from statomata.iterable import IterableOptStateMachine
 from statomata.sdk import create_iterable_opt_sm
 from statomata.unary import UnaryOptState
 
@@ -36,7 +35,7 @@ class OrderShipped:
 
 OrderEvent = t.Union[OrderItemAdded, OrderPaymentReceived, OrderProcessed, OrderShipped]
 OrderControlState = UnaryOptState[OrderEvent, str]
-OrderControlStateMachine = StateMachine[t.Iterable[OrderEvent], t.Iterable[str]]
+OrderControlStateMachine = IterableOptStateMachine[OrderEvent, str]
 
 
 class WaitingForPayment(OrderControlState):
@@ -86,7 +85,7 @@ class Shipping(OrderControlState):
     @override
     def handle(self, income: OrderEvent, context: Context[OrderControlState]) -> str:
         if isinstance(income, OrderShipped):
-            context.set_finished("order completed")
+            context.set_final_state("order completed")
             return "the order was shipped"
 
         elif isinstance(income, (OrderItemAdded, OrderPaymentReceived, OrderProcessed)):

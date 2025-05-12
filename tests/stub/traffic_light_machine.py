@@ -9,9 +9,9 @@ from dataclasses import dataclass
 
 from typing_extensions import assert_never, override
 
-from statomata.abc import Context, StateMachine
+from statomata.abc import Context
 from statomata.sdk import create_unary_sm
-from statomata.unary import UnaryState
+from statomata.unary import UnaryState, UnaryStateMachine
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class CycleEvent:
 
 TrafficEvent = t.Union[GoEvent, CycleEvent]
 TrafficState = UnaryState[TrafficEvent, str]
-TrafficStateMachine = StateMachine[TrafficEvent, str]
+TrafficStateMachine = UnaryStateMachine[TrafficEvent, str]
 
 
 class Green(TrafficState):

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "statomata"
-version = "0.1.0"
+version = "0.2.0"
 description = " a strictly typed, flexible library for building and running state machines in Python"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 license = "MIT"
@@ -14,7 +14,7 @@ typing-extensions = "^4.12.2" # TODO: find a way to avoid it in runtime
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.15.0"
-ruff = "^0.9.10"
+ruff = "^0.11.9"
 pytest = "^8.3.5"
 pytest-asyncio = "^0.25.3"
 pytest-cov = "^6.0.0"

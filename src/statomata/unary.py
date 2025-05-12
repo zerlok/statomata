@@ -82,7 +82,7 @@ class AsyncUnarySeqState(t.Generic[U_contra, V_co], AsyncUnaryState[U_contra, t.
         raise NotImplementedError
 
 
-class UnaryStateMachine(StateMachine[U_contra, V_co]):
+class UnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryState[U_contra, V_co]]):
     def __init__(
         self,
         executor: StateMachineExecutor[UnaryState[U_contra, V_co], U_contra, V_co],
@@ -92,28 +92,19 @@ class UnaryStateMachine(StateMachine[U_contra, V_co]):
         self.__lock = threading.Lock()
 
     @property
+    @override
     def current_state(self) -> UnaryState[U_contra, V_co]:
         return self.__executor.state
 
-    @override
     def run(self, /, income: U_contra) -> V_co:
-        with self.__lock:
-            context = self.__executor.start_state(income)
-            try:
-                outcome = self.current_state.handle(income, context)
-
-            except Exception as err:
-                self.__executor.handle_state_error(err)
-                raise
-
-            else:
-                self.__executor.handle_outcome(income, outcome)
-                self.__executor.finish_state(income)
+        with self.__lock, self.__executor.visit_state(income) as context:
+            outcome = self.current_state.handle(income, context)
+            self.__executor.handle_outcome(income, outcome)
 
             return outcome
 
 
-class AsyncUnaryStateMachine(StateMachine[U_contra, t.Awaitable[V_co]]):
+class AsyncUnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncUnaryState[U_contra, V_co]]):
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncUnaryState[U_contra, V_co], U_contra, V_co],
@@ -123,22 +114,15 @@ class AsyncUnaryStateMachine(StateMachine[U_contra, t.Awaitable[V_co]]):
         self.__lock = asyncio.Lock()
 
     @property
+    @override
     def current_state(self) -> AsyncUnaryState[U_contra, V_co]:
         return self.__executor.state
 
-    @override
     async def run(self, /, income: U_contra) -> V_co:
-        async with self.__lock:
-            context = await self.__executor.start_state(income)
-            try:
+        # NOTE: support python 3.9
+        async with self.__lock:  # noqa: SIM117
+            async with self.__executor.visit_state(income) as context:
                 outcome = await self.current_state.handle(income, context)
-
-            except Exception as err:
-                await self.__executor.handle_state_error(err)
-                raise
-
-            else:
                 await self.__executor.handle_outcome(income, outcome)
-                await self.__executor.finish_state(income)
 
                 return outcome

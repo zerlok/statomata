@@ -1,5 +1,12 @@
 # Statomata
 
+[![Latest Version](https://img.shields.io/pypi/v/statomata.svg)](https://pypi.python.org/pypi/statomata)
+[![Python Supported versions](https://img.shields.io/pypi/pyversions/statomata.svg)](https://pypi.python.org/pypi/statomata)
+[![MyPy Strict](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/en/stable/getting_started.html#strict-mode-and-configuration)
+[![Test Coverage](https://codecov.io/gh/zerlok/statomata/branch/main/graph/badge.svg)](https://codecov.io/gh/zerlok/statomata)
+[![Downloads](https://img.shields.io/pypi/dm/statomata.svg)](https://pypistats.org/packages/statomata)
+[![GitHub stars](https://img.shields.io/github/stars/zerlok/statomata)](https://github.com/zerlok/statomata/stargazers)
+
 **Statomata** is a strictly typed, flexible library for building and running finite state machines (FSMs) and automata in Python. It provides core automata implementations out of the box and lets you define custom states and state management logic.
 
 ## Features

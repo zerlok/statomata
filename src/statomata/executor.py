@@ -1,4 +1,5 @@
 import typing as t
+from contextlib import asynccontextmanager, contextmanager
 
 from typing_extensions import override
 
@@ -31,10 +32,10 @@ class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[S_sta
         self.__next_state = state
 
     @override
-    def set_finished(self, reason: str, *details: object) -> None:
-        # NOTE: final state won't handle income and never returns.
-        final_state = t.cast(S_state, FinalState(reason, *details))
-        self.set_state(final_state)
+    def set_final_state(self, reason: str, *details: object) -> None:
+        # FIXME: possible bug, not sure if final state is a subtype of S_state (see `notify_transitioned`)
+        state = t.cast("S_state", FinalState(reason, *details))
+        self.set_state(state)
 
     @property
     def state(self) -> S_state:
@@ -48,14 +49,28 @@ class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[S_sta
     def is_finished(self) -> bool:
         return self.__finished
 
-    def start_state(self, income: U_contra) -> Context[S_state]:
+    @contextmanager
+    def visit_state(self, income: U_contra) -> t.Iterator[Context[S_state]]:
+        context = self.enter_state(income)
+        try:
+            yield context
+
+        except Exception as err:
+            ok = self.handle_state_error(err)
+            if not ok:
+                raise
+
+        else:
+            self.leave_state(income)
+
+    def enter_state(self, income: U_contra) -> Context[S_state]:
         if not self.__started:
             self.__started = True
             if self.__subscriber is not None:
-                self.__subscriber.notify_start(self.__state)
+                self.__subscriber.notify_started(self.__state)
 
         if self.__subscriber is not None:
-            self.__subscriber.notify_state_start(self.__state, income)
+            self.__subscriber.notify_state_entered(self.__state, income)
 
         return self
 
@@ -63,9 +78,9 @@ class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[S_sta
         if self.__subscriber is not None:
             self.__subscriber.notify_state_outcome(self.__state, income, outcome)
 
-    def finish_state(self, income: U_contra) -> None:
+    def leave_state(self, income: U_contra) -> None:
         if self.__subscriber is not None:
-            self.__subscriber.notify_state_finish(self.__state, income)
+            self.__subscriber.notify_state_left(self.__state, income)
 
         self.reset_state()
 
@@ -73,13 +88,13 @@ class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[S_sta
             self.__finished = True
             if self.__subscriber is not None:
                 # FIXME: possible bug, not sure if final state is a subtype of S_state
-                self.__subscriber.notify_finish(t.cast(S_state, self.__state))
+                self.__subscriber.notify_finished(t.cast("S_state", self.__state))
 
     def handle_state_error(self, err: Exception) -> bool:
         self.__next_state = None
 
         if self.__subscriber is not None:
-            self.__subscriber.notify_state_error(self.__state, err)
+            self.__subscriber.notify_state_failed(self.__state, err)
 
         if self.__fallback is None:
             return False
@@ -95,7 +110,7 @@ class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[S_sta
         source, self.__state, self.__next_state = self.__state, self.__next_state, None
 
         if self.__subscriber is not None:
-            self.__subscriber.notify_transition(source, self.__state)
+            self.__subscriber.notify_transitioned(source, self.__state)
 
         return True
 
@@ -120,10 +135,10 @@ class AsyncStateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[
         self.__next_state = state
 
     @override
-    def set_finished(self, reason: str, *details: object) -> None:
-        # NOTE: final state won't handle income and never returns.
-        final_state = t.cast(S_state, FinalState(reason, *details))
-        self.set_state(final_state)
+    def set_final_state(self, reason: str, *details: object) -> None:
+        # FIXME: possible bug, not sure if final state is a subtype of S_state (see `notify_transitioned`)
+        state = t.cast("S_state", FinalState(reason, *details))
+        self.set_state(state)
 
     @property
     def state(self) -> S_state:
@@ -137,14 +152,28 @@ class AsyncStateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[
     def is_finished(self) -> bool:
         return self.__finished
 
-    async def start_state(self, income: U_contra) -> Context[S_state]:
+    @asynccontextmanager
+    async def visit_state(self, income: U_contra) -> t.AsyncIterator[Context[S_state]]:
+        context = await self.enter_state(income)
+        try:
+            yield context
+
+        except Exception as err:
+            ok = await self.handle_state_error(err)
+            if not ok:
+                raise
+
+        else:
+            await self.leave_state(income)
+
+    async def enter_state(self, income: U_contra) -> Context[S_state]:
         if not self.__started:
             self.__started = True
             if self.__subscriber is not None:
-                await self.__subscriber.notify_start(self.__state)
+                await self.__subscriber.notify_started(self.__state)
 
         if self.__subscriber is not None:
-            await self.__subscriber.notify_state_start(self.__state, income)
+            await self.__subscriber.notify_state_entered(self.__state, income)
 
         return self
 
@@ -152,9 +181,9 @@ class AsyncStateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[
         if self.__subscriber is not None:
             await self.__subscriber.notify_state_outcome(self.__state, income, outcome)
 
-    async def finish_state(self, income: U_contra) -> None:
+    async def leave_state(self, income: U_contra) -> None:
         if self.__subscriber is not None:
-            await self.__subscriber.notify_state_finish(self.__state, income)
+            await self.__subscriber.notify_state_left(self.__state, income)
 
         await self.reset_state()
 
@@ -162,13 +191,13 @@ class AsyncStateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[
             self.__finished = True
             if self.__subscriber is not None:
                 # FIXME: possible bug, not sure if final state is a subtype of S_state
-                await self.__subscriber.notify_finish(t.cast(S_state, self.__state))
+                await self.__subscriber.notify_finished(t.cast("S_state", self.__state))
 
     async def handle_state_error(self, err: Exception) -> bool:
         self.__next_state = None
 
         if self.__subscriber is not None:
-            await self.__subscriber.notify_state_error(self.__state, err)
+            await self.__subscriber.notify_state_failed(self.__state, err)
 
         if self.__fallback is None:
             return False
@@ -184,6 +213,6 @@ class AsyncStateMachineExecutor(t.Generic[S_state, U_contra, V_contra], Context[
         source, self.__state, self.__next_state = self.__state, self.__next_state, None
 
         if self.__subscriber is not None:
-            await self.__subscriber.notify_transition(source, self.__state)
+            await self.__subscriber.notify_transitioned(source, self.__state)
 
         return True
