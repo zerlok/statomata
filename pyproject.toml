@@ -9,7 +9,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.9"
 anyio = {version = "^4.9.0", optional = true}
-typing-extensions = "^4.12.2" # TODO: find a way to avoid it in runtime
+typing-extensions = "^4.13.2" # TODO: find a way to avoid it in runtime
 
 
 [tool.poetry.group.dev.dependencies]
