@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import inspect
+import threading
 import typing as t
 
 from typing_extensions import Concatenate, ParamSpec, assert_never
 
-from statomata.declarative.builder import Condition, Fallback, State, StateRegistry
-from statomata.declarative.state import MethodCallState, MethodCallTransition
+from statomata.declarative.builder import Condition, Fallback, State, StateRegistry, extract_property_getter
+from statomata.declarative.state import MethodCall, MethodCallState, MethodCallTransition
+from statomata.executor import StateMachineExecutor
+from statomata.subscriber import StateMachineSubscriberRegistry
+
+if t.TYPE_CHECKING:
+    from statomata.abc import StateMachineSubscriber
 
 P = ParamSpec("P")
 T = t.TypeVar("T")
@@ -20,7 +26,7 @@ class Configurator:
         registry = self.registry(klass)
         return Context(
             registry=registry,
-            state_map={state_def: MethodCallState[T](state_def.name) for state_def in registry.states},
+            state_map={state_def: self.build_state(klass, state_def) for state_def in registry.states},
         )
 
     def registry(self, klass: type[T]) -> StateRegistry:
@@ -38,19 +44,36 @@ class Configurator:
 
         return StateRegistry(state_defs)
 
+    def create_lock(self) -> t.ContextManager[object]:
+        return threading.Lock()
+
+    def create_sm_executor(
+        self,
+        initial: MethodCallState[T],
+        fallback: t.Optional[t.Callable[[Exception], t.Optional[MethodCallState[T]]]] = None,
+        subscribers: t.Optional[
+            t.Sequence[StateMachineSubscriber[MethodCallState[T], MethodCall[T, object], object]]
+        ] = None,
+    ) -> StateMachineExecutor[MethodCallState[T], MethodCall[T, object], object]:
+        return StateMachineExecutor(
+            initial,
+            fallback,
+            StateMachineSubscriberRegistry(*subscribers) if subscribers else None,
+        )
+
+    # NOTE: only python 3.12 supports generic methods
+    def build_state(self, klass: type[T], state_def: State) -> MethodCallState[T]:  # noqa: ARG002
+        return MethodCallState[T](state_def.name)
+
     def build_transition(
         self,
         func: t.Callable[Concatenate[T, P], V_co],
         destination: MethodCallState[T],
         condition: t.Optional[Condition] = None,
     ) -> MethodCallTransition[T]:
-        if isinstance(condition, property) and condition.fget is None:
-            msg = "property fget method must be set"
-            raise TypeError(msg, condition)
-
         return MethodCallTransition(
             func=func,
-            condition=condition.fget
+            condition=extract_property_getter(condition)
             if isinstance(condition, property)
             else condition
             if condition is not None
@@ -62,8 +85,8 @@ class Configurator:
         self,
         fallback: Fallback,
         state: MethodCallState[T],
-    ) -> tuple[t.Sequence[type[Exception]], t.Callable[[Exception], t.Optional[MethodCallState[T]]]]:
-        def factory(_: Exception) -> t.Optional[MethodCallState[T]]:
+    ) -> tuple[t.Sequence[type[Exception]], t.Callable[[T, Exception], t.Optional[MethodCallState[T]]]]:
+        def factory(_s: T, _e: Exception) -> t.Optional[MethodCallState[T]]:
             return state
 
         if isinstance(fallback, bool):

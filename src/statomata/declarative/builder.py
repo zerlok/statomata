@@ -9,8 +9,6 @@ from functools import cached_property, wraps
 from typing_extensions import ParamSpec, TypeAlias, override
 
 P = ParamSpec("P")
-T = t.TypeVar("T")
-U_contra = t.TypeVar("U_contra", contravariant=True)
 V_co = t.TypeVar("V_co", covariant=True)
 
 
@@ -23,22 +21,27 @@ Condition: TypeAlias = t.Union[t.Callable[[t.Any], bool], property]  # type: ign
 class TransitionBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
+        """Assign transition to provided method function."""
         raise NotImplementedError
 
     @abc.abstractmethod
     def to(self, destination: State) -> Transition:
+        """Set transition destination state."""
         raise NotImplementedError
 
     @abc.abstractmethod
     def when(self, condition: Condition) -> Transition:
+        """Set condition."""
         raise NotImplementedError
 
     @abc.abstractmethod
     def when_not(self, condition: Condition) -> Transition:
+        """Set negative condition."""
         raise NotImplementedError
 
     @abc.abstractmethod
     def ternary(self, condition: Condition) -> TernaryTransition:
+        """Create ternary transition."""
         raise NotImplementedError
 
 
@@ -52,7 +55,7 @@ class StateRegistry:
 
     @cached_property
     def initial(self) -> State:
-        initials = list(state for state in self.__states if state.initial)
+        initials = [state for state in self.__states if state.initial]
 
         if not initials:
             msg = "initial state is not set"
@@ -66,7 +69,7 @@ class StateRegistry:
 
     @cached_property
     def finals(self) -> t.Sequence[State]:
-        finals = list(state for state in self.__states if state.final)
+        finals = [state for state in self.__states if state.final]
 
         if not finals:
             msg = "final state is not set"
@@ -76,7 +79,7 @@ class StateRegistry:
 
     @cached_property
     def fallbacks(self) -> t.Sequence[State]:
-        return list(state for state in self.__states if state.fallback)
+        return [state for state in self.__states if state.fallback]
 
 
 class TransitionRegistry(t.Iterable[tuple[MethodFuncAny, t.Sequence["Transition"]]]):
@@ -104,9 +107,12 @@ class TransitionRegistry(t.Iterable[tuple[MethodFuncAny, t.Sequence["Transition"
 
 
 class State(TransitionBuilder):
+    """Defines state for `DeclarativeStateMachine`"""
+
     def __init__(
         self,
         name: t.Optional[str] = None,
+        *,
         initial: bool = False,
         final: bool = False,
         fallback: Fallback = False,
@@ -124,6 +130,7 @@ class State(TransitionBuilder):
 
     @override
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
+        """Wrap method with cycle transition."""
         return self.to(self)(func)
 
     @override
@@ -144,6 +151,14 @@ class State(TransitionBuilder):
 
 
 class Transition(TransitionBuilder):
+    """
+    Defines transition between two states for `DeclarativeStateMachine`.
+
+    You don't have to instantiate this class directly, see `State` methods and example in `DeclarativeStateMachine`.
+
+    Use python decorators to assign transition to some method.
+    """
+
     def __init__(
         self,
         registry: TransitionRegistry,
@@ -179,10 +194,7 @@ class Transition(TransitionBuilder):
     @override
     def when_not(self, condition: Condition) -> Transition:
         if isinstance(condition, property):  # type: ignore[misc]
-            cond: t.Optional[t.Callable[[object], bool]] = condition.fget
-            if cond is None:
-                msg = "property fget method must be set"
-                raise TypeError(msg, condition)
+            cond = extract_property_getter(condition)
 
             @wraps(cond)
             def negate(obj: object) -> bool:
@@ -202,6 +214,28 @@ class Transition(TransitionBuilder):
 
 
 class TernaryTransition:
+    """
+    Helper to build a transition with ternary condition.
+
+    In the following example `transit_ternary` and `transit_s2_or_s3` methods perform transition in the same way:
+
+    >>> class SimpleSM(DeclarativeStateMachine):
+    ...     s1, s2, s3 = State(initial=True), State(), State()
+    ...
+    ...     @property
+    ...     def is_ok(self) -> bool:
+    ...         raise NotImplementedError
+    ...
+    ...     @s1.ternary(is_ok).then(s2).otherwise(s3)
+    ...     def transit_ternary(self) -> None:
+    ...         pass
+    ...
+    ...     @s1.to(s2).when(is_ok)
+    ...     @s1.to(s3).when_not(is_ok)
+    ...     def transit_s2_or_s3(self) -> None:
+    ...         pass
+    """
+
     def __init__(
         self,
         registry: TransitionRegistry,
@@ -219,9 +253,22 @@ class TernaryTransition:
         return func
 
     def then(self, state: State) -> TernaryTransition:
+        """Set destination when condition is truthy."""
         self.__then.to(state)
         return self
 
     def otherwise(self, state: State) -> TernaryTransition:
+        """Set destination when condition is falsy."""
         self.__otherwise.to(state)
         return self
+
+
+def extract_property_getter(prop: property) -> t.Callable[[object], bool]:
+    # NOTE: we can assume that getter turns truthy value (to be used in `if` statement)
+    func: t.Optional[t.Callable[[object], bool]] = prop.fget
+
+    if func is None:
+        msg = "property fget method must be set"
+        raise TypeError(msg, prop)
+
+    return func

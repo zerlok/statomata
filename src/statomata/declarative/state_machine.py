@@ -2,25 +2,71 @@
 
 from __future__ import annotations
 
-import threading
 import typing as t
-from functools import singledispatch, wraps
+from functools import singledispatchmethod, wraps
 
 from typing_extensions import Concatenate, ParamSpec, Self, override
 
-from statomata.abc import InvalidStateError, StateMachine
+from statomata.abc import InvalidStateError, StateMachine, StateMachineSubscriber
 from statomata.declarative.builder import State
 from statomata.declarative.config import Configurator, Context
 from statomata.declarative.state import MethodCall, MethodCallState
-from statomata.executor import StateMachineExecutor
 
 P = ParamSpec("P")
 V_co = t.TypeVar("V_co", covariant=True)
 
 
 class DeclarativeStateMachine(StateMachine[State]):
+    """
+    Base class to set up state machines in declarative way.
+
+    Derivatives should define states: `State` class attributes (one state must be initial); and methods with state
+    transitions.
+
+    Each instance will keep its own state. To perform transitions - invoke appropriate methods with transition
+    decorators. Those methods are executed with the following alogirthm:
+
+    1. Acquire the instance lock to prevent other method concurrent execution.
+    2. Check if current state matches the transition source. Raise `InvalidStateError` on mismatch.
+    3. Enter the state (invokes appropriate subscribers, see `StateMachineExecutor` for more info).
+    4. Invoke specified method function (see `MethodCallState` for more info) - provides state `outcome`.
+    5. Check transitions to perform transition into new state (see `MethodCallState` for more info).
+    6. Notify subscribers about `outcome`.
+    7. Leave the state (invokes appropriate subscribers, see `StateMachineExecutor` for more info).
+    8. Release lock.
+    9. Return `outcome` value.
+
+    Simple state machine defintion example:
+
+    >>> class SimpleSM(DeclarativeStateMachine):
+    ...     s1, s2, s3 = State(initial=True), State(), State()
+    ...
+    ...     def __init__(self, name: str) -> None:
+    ...         super().__init__()
+    ...         self.__name = name
+    ...         self.__cycles = 0
+    ...
+    ...     @s1 # stay in `s1` state (cycle transition)
+    ...     def transit_cycle(self) -> None:
+    ...         print("name:", self.__name)
+    ...         self.__cycles += 1
+    ...
+    ...     @s1.to(s2) # transit from `s1` to `s2`
+    ...     def transit_from_s1_to_s2(self) -> int:
+    ...         return self.__cycles
+    ...
+    ...     @property
+    ...     def can_transit_to_s3(self) -> bool:
+    ...         return True
+    ...
+    ...     @s2.to(s3).when(can_transit_to_s3) # transit from `s2` to `s3` if `can_transit_to_s3`
+    ...     def transit_from_s2_to_s3(self, p1: str, p2: str) -> str:
+    ...         return ".".join((p1, p2, self.__name))
+    """
+
+    __conf: t.ClassVar[Configurator]
+    __fallback_handler: t.ClassVar[t.Callable[[Self, Exception], t.Optional[MethodCallState[Self]]]]
     __context: t.ClassVar[Context[Self]]
-    __fallback_handler: t.ClassVar[t.Callable[[Exception], t.Optional[MethodCallState[Self]]]]
 
     @override
     def __init_subclass__(
@@ -31,6 +77,35 @@ class DeclarativeStateMachine(StateMachine[State]):
         conf = configurator if configurator is not None else Configurator()
         context = conf.context(cls)
 
+        cls.__setup_transitions(conf, context)
+        cls.__setup_fallback_handler(conf, context)
+
+        # save all context
+        cls.__conf = conf
+        cls.__context = t.cast("Context[Self]", context)
+
+    def __init__(
+        self,
+        initial: t.Optional[State] = None,
+        subscribers: t.Optional[
+            t.Sequence[StateMachineSubscriber[MethodCallState[Self], MethodCall[Self, object], object]]
+        ] = None,
+        lock: t.Optional[t.ContextManager[object]] = None,
+    ) -> None:
+        self.__executor = self.__conf.create_sm_executor(
+            self.__context.state(initial if initial is not None else self.__context.registry.initial),
+            self.__fallback_handler,
+            subscribers,
+        )
+        self.__lock = lock if lock is not None else self.__conf.create_lock()
+
+    @override
+    @property
+    def current_state(self) -> State:
+        return self.__context.state_def(self.__executor.state)
+
+    @classmethod
+    def __setup_transitions(cls, conf: Configurator, context: Context[Self]) -> None:
         for source_def in context.registry.states:
             for func, transition_defs in source_def.transitions:
                 source = context.state(source_def)
@@ -45,8 +120,11 @@ class DeclarativeStateMachine(StateMachine[State]):
                     destination = context.state(transition_def.destination)
                     source.add_transition(conf.build_transition(func, destination, transition_def.condition))
 
-        @singledispatch
-        def handle(_: Exception) -> t.Optional[MethodCallState[Self]]:
+    @classmethod
+    def __setup_fallback_handler(cls, conf: Configurator, context: Context[Self]) -> None:
+        # NOTE: this is desired behavior
+        @singledispatchmethod  # noqa: PLE1520
+        def handle(_self: Self, _e: Exception) -> t.Optional[MethodCallState[Self]]:
             return None
 
         for fallback_state_def in context.registry.fallbacks:
@@ -56,47 +134,31 @@ class DeclarativeStateMachine(StateMachine[State]):
             )
 
             for err_type in err_types:
-                # FIXME: check if typing error
-                handle.register(err_type)(state_factory)  # type: ignore[arg-type]
+                handle.register(err_type)(state_factory)
 
-        cls.__fallback_handler = handle
-
-        cls.__context = t.cast("Context[Self]", context)
-
-    def __init__(
-        self,
-        initial: t.Optional[State] = None,
-        lock: t.Optional[threading.Lock] = None,
-    ) -> None:
-        self.__lock = lock if lock is not None else threading.Lock()
-        self.__executor = StateMachineExecutor[MethodCallState[Self], MethodCall[Self, object], object](
-            state=self.__context.state(initial if initial is not None else self.__context.registry.initial),
-            # FIXME: check if typing error
-            fallback=self.__fallback_handler,  # type: ignore[arg-type]
-        )
-
-    @override
-    @property
-    def current_state(self) -> State:
-        return self.__context.state_def(self.__executor.state)
+        # FIXME: possible type error
+        cls.__fallback_handler = handle  # type: ignore[assignment]
 
     @classmethod
     def __wrap_method(
         cls,
         func: t.Callable[Concatenate[Self, P], V_co],
-        expected_state: MethodCallState[Self],
+        source: MethodCallState[Self],
     ) -> t.Callable[Concatenate[Self, P], V_co]:
         @wraps(func)
         def wrapper(self: Self, *args: P.args, **kwargs: P.kwargs) -> V_co:
+            # prevent concurrent method execution
             with self.__lock:
                 executor = self.__executor
                 state = executor.state
 
-                if state is not expected_state:
-                    raise InvalidStateError(state, expected_state)
+                # check if current state matches transition source
+                if state is not source:
+                    raise InvalidStateError(state, source)
 
                 income: MethodCall[Self, V_co] = MethodCall(self, func, args, kwargs)
 
+                # execute `MethodCallState`
                 with executor.visit_state(income) as context:
                     outcome = state.handle(income, context)
                     executor.handle_outcome(income, outcome)
