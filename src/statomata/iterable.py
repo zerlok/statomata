@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 import threading
 import typing as t
-from asyncio import Lock as AsyncLock
 
 from typing_extensions import override
 
@@ -43,10 +43,10 @@ class IterableStateMachine(t.Generic[U_contra, V_co], StateMachine[IterableState
     def __init__(
         self,
         executor: StateMachineExecutor[IterableState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.ContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = threading.Lock()
+        self.__lock = lock if lock is not None else threading.Lock()
 
     @property
     @override
@@ -61,7 +61,7 @@ class IterableStateMachine(t.Generic[U_contra, V_co], StateMachine[IterableState
                         yield outcome
                         self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_finished:
+                if self.__executor.is_aborted:
                     break
 
 
@@ -69,10 +69,10 @@ class AsyncIterableStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncIte
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncIterableState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.AsyncContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = AsyncLock()
+        self.__lock = lock if lock is not None else asyncio.Lock()
 
     @property
     @override
@@ -87,7 +87,7 @@ class AsyncIterableStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncIte
                         yield outcome
                         await self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_finished:
+                if self.__executor.is_aborted:
                     break
 
 
@@ -95,10 +95,10 @@ class IterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryOptSt
     def __init__(
         self,
         executor: StateMachineExecutor[UnaryOptState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.ContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = threading.Lock()
+        self.__lock = lock if lock is not None else threading.Lock()
 
     @property
     @override
@@ -114,7 +114,7 @@ class IterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryOptSt
                         yield outcome
                         self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_finished:
+                if self.__executor.is_aborted:
                     break
 
 
@@ -122,10 +122,10 @@ class AsyncIterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncUnaryOptState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.AsyncContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = AsyncLock()
+        self.__lock = lock if lock is not None else asyncio.Lock()
 
     @property
     @override
@@ -141,7 +141,7 @@ class AsyncIterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
                         yield outcome
                         await self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_finished:
+                if self.__executor.is_aborted:
                     break
 
 
@@ -149,10 +149,10 @@ class IterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[UnarySeqSt
     def __init__(
         self,
         executor: StateMachineExecutor[UnarySeqState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.ContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = threading.Lock()
+        self.__lock = lock if lock is not None else threading.Lock()
 
     @property
     @override
@@ -169,7 +169,7 @@ class IterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[UnarySeqSt
                         yield outcome
                         self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_finished:
+                if self.__executor.is_aborted:
                     break
 
 
@@ -177,10 +177,10 @@ class AsyncIterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncUnarySeqState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.AsyncContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = AsyncLock()
+        self.__lock = lock if lock is not None else asyncio.Lock()
 
     @property
     @override
@@ -197,5 +197,5 @@ class AsyncIterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
                         yield outcome
                         await self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_finished:
+                if self.__executor.is_aborted:
                     break

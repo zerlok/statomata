@@ -10,7 +10,13 @@ from tests.stub.order_control_machine import (
     OrderProcessed,
     OrderShipped,
 )
-from tests.stub.traffic_light_machine import CycleEvent, GoEvent, TrafficEvent, TrafficStateMachine
+from tests.stub.traffic_light_machine import (
+    AsyncTrafficStateMachine,
+    CycleEvent,
+    GoEvent,
+    TrafficEvent,
+    TrafficStateMachine,
+)
 
 
 @pytest.mark.parametrize(
@@ -76,3 +82,33 @@ def test_traffic_light_machine_returns_expected_outcomes(
     outcomes: t.Sequence[str],
 ) -> None:
     assert [traffic_light_machine.run(income) for income in incomes] == list(outcomes)
+
+
+@pytest.mark.parametrize(
+    ("incomes", "outcomes"),
+    [
+        pytest.param(
+            [
+                GoEvent(),
+                CycleEvent(),
+            ]
+            * 4,
+            [
+                "you can go",
+                "switched to yellow",
+                "you may go on your own risk",
+                "switched to red",
+                "you can't go!",
+                "switched to green",
+                "you can go",
+                "switched to yellow",
+            ],
+        ),
+    ],
+)
+async def test_traffic_light_machine_async_returns_expected_outcomes(
+    traffic_light_machine_async: AsyncTrafficStateMachine,
+    incomes: t.Sequence[TrafficEvent],
+    outcomes: t.Sequence[str],
+) -> None:
+    assert [await traffic_light_machine_async.run(income) for income in incomes] == list(outcomes)

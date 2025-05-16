@@ -9,7 +9,6 @@ from typing_extensions import assert_never, override
 
 from statomata.abc import Context
 from statomata.iterable import IterableOptStateMachine
-from statomata.sdk import create_iterable_opt_sm
 from statomata.unary import UnaryOptState
 
 
@@ -85,7 +84,7 @@ class Shipping(OrderControlState):
     @override
     def handle(self, income: OrderEvent, context: Context[OrderControlState]) -> str:
         if isinstance(income, OrderShipped):
-            context.set_final_state("order completed")
+            context.abort()
             return "the order was shipped"
 
         elif isinstance(income, (OrderItemAdded, OrderPaymentReceived, OrderProcessed)):
@@ -93,7 +92,3 @@ class Shipping(OrderControlState):
 
         else:
             assert_never(income)
-
-
-def create_order_control_machine() -> OrderControlStateMachine:
-    return create_iterable_opt_sm(WaitingForPayment())
