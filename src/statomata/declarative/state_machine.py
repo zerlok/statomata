@@ -65,8 +65,8 @@ class DeclarativeStateMachine(StateMachine[State]):
     """
 
     __conf: t.ClassVar[Configurator]
-    __fallback_handler: t.ClassVar[t.Callable[[Self, Exception], t.Optional[MethodCallState[Self]]]]
     __context: t.ClassVar[Context[Self]]
+    __fallback: t.ClassVar[t.Callable[[Self, Exception], t.Optional[MethodCallState[Self]]]]
 
     @override
     def __init_subclass__(
@@ -78,7 +78,7 @@ class DeclarativeStateMachine(StateMachine[State]):
         context = conf.context(cls)
 
         cls.__setup_transitions(conf, context)
-        cls.__setup_fallback_handler(conf, context)
+        cls.__setup_fallback(conf, context)
 
         # save all context
         cls.__conf = conf
@@ -94,7 +94,7 @@ class DeclarativeStateMachine(StateMachine[State]):
     ) -> None:
         self.__executor = self.__conf.create_sm_executor(
             self.__context.state(initial if initial is not None else self.__context.registry.initial),
-            self.__fallback_handler,
+            self.__fallback,
             subscribers,
         )
         self.__lock = lock if lock is not None else self.__conf.create_lock()
@@ -121,7 +121,7 @@ class DeclarativeStateMachine(StateMachine[State]):
                     source.add_transition(conf.build_transition(func, destination, transition_def.condition))
 
     @classmethod
-    def __setup_fallback_handler(cls, conf: Configurator, context: Context[Self]) -> None:
+    def __setup_fallback(cls, conf: Configurator, context: Context[Self]) -> None:
         # NOTE: this is desired behavior
         @singledispatchmethod  # noqa: PLE1520
         def handle(_self: Self, _e: Exception) -> t.Optional[MethodCallState[Self]]:
@@ -137,7 +137,7 @@ class DeclarativeStateMachine(StateMachine[State]):
                 handle.register(err_type)(state_factory)
 
         # FIXME: possible type error
-        cls.__fallback_handler = handle  # type: ignore[assignment]
+        cls.__fallback = handle  # type: ignore[assignment]
 
     @classmethod
     def __wrap_method(

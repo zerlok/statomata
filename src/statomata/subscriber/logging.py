@@ -11,7 +11,7 @@ class LoggingSubscriber(StateMachineSubscriber[object, object, object]):
         self.__log = log or logging.getLogger(__name__)
 
     @override
-    def notify_started(self, state: object) -> None:
+    def notify_initial(self, state: object) -> None:
         self.__log.info("started from %s", state)
 
     @override
@@ -31,11 +31,11 @@ class LoggingSubscriber(StateMachineSubscriber[object, object, object]):
         self.__log.info("failed %s", state)
 
     @override
-    def notify_transitioned(self, source: object, dest: object) -> None:
-        self.__log.info("transitioned from %s to %s", source, dest)
+    def notify_transition(self, source: object, destination: object) -> None:
+        self.__log.info("transitioned from %s to %s", source, destination)
 
     @override
-    def notify_finished(self, state: object) -> None:
+    def notify_final(self, state: object) -> None:
         self.__log.info("finished at %s", state)
 
 
@@ -44,7 +44,7 @@ class AsyncLoggingSubscriber(StateMachineAsyncSubscriber[object, object, object]
         self.__log = log or logging.getLogger(__name__)
 
     @override
-    async def notify_started(self, state: object) -> None:
+    async def notify_initial(self, state: object) -> None:
         self.__log.info("started from %s", state)
 
     @override
@@ -64,9 +64,9 @@ class AsyncLoggingSubscriber(StateMachineAsyncSubscriber[object, object, object]
         self.__log.info("failed %s", state)
 
     @override
-    async def notify_transitioned(self, source: object, dest: object) -> None:
-        self.__log.info("transitioned from %s to %s", source, dest)
+    async def notify_transition(self, source: object, destination: object) -> None:
+        self.__log.info("transitioned from %s to %s", source, destination)
 
     @override
-    async def notify_finished(self, state: object) -> None:
+    async def notify_final(self, state: object) -> None:
         self.__log.info("finished at %s", state)

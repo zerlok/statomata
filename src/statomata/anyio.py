@@ -39,5 +39,5 @@ class AnyioStreamStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncItera
                         await sender.send(outcome)
                         await self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_finished:
+                if self.__executor.is_aborted:
                     break

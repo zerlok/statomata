@@ -86,10 +86,10 @@ class UnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryState[U_con
     def __init__(
         self,
         executor: StateMachineExecutor[UnaryState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.ContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = threading.Lock()
+        self.__lock = lock if lock is not None else threading.Lock()
 
     @property
     @override
@@ -108,10 +108,10 @@ class AsyncUnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncUnaryS
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncUnaryState[U_contra, V_co], U_contra, V_co],
+        lock: t.Optional[t.AsyncContextManager[object]] = None,
     ) -> None:
         self.__executor = executor
-
-        self.__lock = asyncio.Lock()
+        self.__lock = lock if lock is not None else asyncio.Lock()
 
     @property
     @override

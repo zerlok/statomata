@@ -11,7 +11,7 @@ from typing_extensions import Concatenate, ParamSpec, assert_never
 from statomata.declarative.builder import Condition, Fallback, State, StateRegistry, extract_property_getter
 from statomata.declarative.state import MethodCall, MethodCallState, MethodCallTransition
 from statomata.executor import StateMachineExecutor
-from statomata.subscriber import StateMachineSubscriberRegistry
+from statomata.subscriber.registry import StateMachineSubscriberRegistry
 
 if t.TYPE_CHECKING:
     from statomata.abc import StateMachineSubscriber

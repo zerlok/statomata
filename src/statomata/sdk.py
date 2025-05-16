@@ -9,7 +9,7 @@ from statomata.iterable import (
     IterableState,
     IterableStateMachine,
 )
-from statomata.subscriber import StateMachineAsyncSubscriberRegistry, StateMachineSubscriberRegistry
+from statomata.subscriber.registry import StateMachineAsyncSubscriberRegistry, StateMachineSubscriberRegistry
 from statomata.unary import AsyncUnaryState, AsyncUnaryStateMachine, UnaryOptState, UnaryState, UnaryStateMachine
 
 S_contra = t.TypeVar("S_contra", contravariant=True)

@@ -32,8 +32,8 @@ class InvalidStateError(t.Generic[U_contra, V_co], StateMachineRuntimeError):
         return f"actual={self.actual}; expected={self.expected}"
 
 
-class FinalStateAlreadyReachedError(StateMachineRuntimeError):
-    """Raised when state machine execution is triggered again after the final state was reached."""
+class AbortedStateReachedError(StateMachineRuntimeError):
+    """Raised when running state machine after the final state was reached."""
 
 
 class Context(t.Generic[S_contra], metaclass=abc.ABCMeta):
@@ -44,13 +44,13 @@ class Context(t.Generic[S_contra], metaclass=abc.ABCMeta):
     """
 
     @abc.abstractmethod
-    def set_state(self, state: S_contra) -> None:
-        """Change `StateMachine` state."""
+    def set_state(self, state: S_contra, *, final: bool = False) -> None:
+        """Change `StateMachine` state. If final is set - abort the context."""
         raise NotImplementedError
 
     @abc.abstractmethod
-    def set_final_state(self, reason: str, *details: object) -> None:
-        """Set final state, `StateMachine` will stop run."""
+    def abort(self) -> None:
+        """Stop running the state machine. Means that the final state was reached."""
         raise NotImplementedError
 
 
@@ -58,7 +58,7 @@ class State(t.Generic[U_contra, V_co], metaclass=abc.ABCMeta):
     """
     State interface.
 
-    State may manipulate the running `StateMachine` via `Context` transitions.
+    State may manipulate the running `StateMachine` via `Context` methods.
 
     State handles income and returns the outcome.
     """
@@ -81,20 +81,20 @@ class StateMachine(t.Generic[S_co], metaclass=abc.ABCMeta):
     """
     State machine interface.
 
-    Each implementation should provide public transitions to process incomes through states until the final state is
+    Each implementation should provide public methods to process incomes through states until the final state is
     reached and return outcomes from states.
     """
 
     @property
     @abc.abstractmethod
     def current_state(self) -> S_co:
-        """Provide current state."""
+        """Return current state."""
         raise NotImplementedError
 
 
 class StateMachineSubscriber(t.Generic[S_contra, U_contra, V_contra], metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def notify_started(self, state: S_contra) -> None:
+    def notify_initial(self, state: S_contra) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -114,17 +114,17 @@ class StateMachineSubscriber(t.Generic[S_contra, U_contra, V_contra], metaclass=
         raise NotImplementedError
 
     @abc.abstractmethod
-    def notify_transitioned(self, source: S_contra, dest: S_contra) -> None:
+    def notify_transition(self, source: S_contra, destination: S_contra) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def notify_finished(self, state: S_contra) -> None:
+    def notify_final(self, state: S_contra) -> None:
         raise NotImplementedError
 
 
 class StateMachineAsyncSubscriber(t.Generic[S_contra, U_contra, V_contra], metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    async def notify_started(self, state: S_contra) -> None:
+    async def notify_initial(self, state: S_contra) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -144,9 +144,9 @@ class StateMachineAsyncSubscriber(t.Generic[S_contra, U_contra, V_contra], metac
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def notify_transitioned(self, source: S_contra, dest: S_contra) -> None:
+    async def notify_transition(self, source: S_contra, destination: S_contra) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod
-    async def notify_finished(self, state: S_contra) -> None:
+    async def notify_final(self, state: S_contra) -> None:
         raise NotImplementedError
