@@ -3,19 +3,22 @@ from __future__ import annotations
 import abc
 import inspect
 import typing as t
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from functools import cached_property, wraps
 
-from typing_extensions import ParamSpec, TypeAlias, override
+from typing_extensions import Concatenate, ParamSpec, TypeAlias, override
 
 P = ParamSpec("P")
+T = t.TypeVar("T")
 V_co = t.TypeVar("V_co", covariant=True)
+W_co = t.TypeVar("W_co", covariant=True)
 
 
 # NOTE: base type helpers
 MethodFuncAny: TypeAlias = t.Callable[..., object]  # type: ignore[explicit-any]
 Fallback: TypeAlias = t.Union[type[Exception], t.Sequence[type[Exception]], bool]
 Condition: TypeAlias = t.Union[t.Callable[[t.Any], bool], property]  # type: ignore[explicit-any]
+ValueGetter: TypeAlias = t.Union[t.Callable[[t.Any], V_co], property]  # type: ignore[explicit-any]
 
 
 class TransitionBuilder(metaclass=abc.ABCMeta):
@@ -44,10 +47,14 @@ class TransitionBuilder(metaclass=abc.ABCMeta):
         """Create ternary transition."""
         raise NotImplementedError
 
+    @abc.abstractmethod
+    def idempotent(self) -> IdempotentTransition[None]:
+        raise NotImplementedError
 
-class StateRegistry:
+
+class StateMachineRegistry:
     def __init__(self, states: t.Sequence[State]) -> None:
-        self.__states = states
+        self.__states = list(states)
 
     @property
     def states(self) -> t.Sequence[State]:
@@ -81,6 +88,16 @@ class StateRegistry:
     def fallbacks(self) -> t.Sequence[State]:
         return [state for state in self.__states if state.fallback]
 
+    @cached_property
+    def transitions(self) -> t.Mapping[MethodFuncAny, t.Sequence[Transition]]:
+        funcs = defaultdict[MethodFuncAny, list[Transition]](list)
+
+        for state in self.__states:
+            for func, transitions in state.transitions:
+                funcs[func].extend(transitions)
+
+        return funcs
+
 
 class TransitionRegistry(t.Iterable[tuple[MethodFuncAny, t.Sequence["Transition"]]]):
     def __init__(self) -> None:
@@ -97,13 +114,16 @@ class TransitionRegistry(t.Iterable[tuple[MethodFuncAny, t.Sequence["Transition"
     def __iter__(self) -> t.Iterator[tuple[MethodFuncAny, t.Sequence[Transition]]]:
         return iter(self.__funcs.items())
 
-    def register(self, func: MethodFuncAny, method_def: Transition) -> None:
+    def register(self, func: MethodFuncAny, transition_def: Transition) -> None:
         if inspect.iscoroutinefunction(func):
             msg = "coroutine functions is not supported"
             # NOTE: inspect returns any
-            raise TypeError(msg, func, method_def)  # type: ignore[misc]
+            raise TypeError(msg, func, transition_def)  # type: ignore[misc]
 
-        self.__funcs.setdefault(func, list[Transition]()).append(method_def)
+        if func not in self.__funcs:
+            self.__funcs[func] = list[Transition]()
+
+        self.__funcs[func].append(transition_def)
 
 
 class State(TransitionBuilder):
@@ -126,7 +146,9 @@ class State(TransitionBuilder):
 
     @override
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.name}>"
+        return f"<{self.__class__.__name__} at {hex(id(self))}: {self.name}>"
+
+    __repr__ = __str__
 
     @override
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
@@ -148,6 +170,10 @@ class State(TransitionBuilder):
     @override
     def ternary(self, condition: Condition) -> TernaryTransition:
         return Transition(self.transitions, self).ternary(condition)
+
+    @override
+    def idempotent(self) -> IdempotentTransition[None]:
+        return IdempotentTransition(self)
 
 
 class Transition(TransitionBuilder):
@@ -175,6 +201,8 @@ class Transition(TransitionBuilder):
     def __str__(self) -> str:
         return f"<{self.__class__.__name__}: {self.source} -> {self.destination}>"
 
+    __repr__ = __str__
+
     @override
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
         # NOTE: `MethodFuncAny` is actually `t.Callable[..., t.Any]`
@@ -193,24 +221,25 @@ class Transition(TransitionBuilder):
 
     @override
     def when_not(self, condition: Condition) -> Transition:
-        if isinstance(condition, property):  # type: ignore[misc]
-            cond = extract_property_getter(condition)
+        func = normalize_condition(condition)
 
-            @wraps(cond)
-            def negate(obj: object) -> bool:
-                return not cond(obj)
-
-        else:
-
-            @wraps(condition)
-            def negate(obj: object) -> bool:
-                return not condition(obj)
+        @wraps(func)
+        def negate(obj: object) -> bool:
+            return not func(obj)
 
         return self.when(negate)
 
     @override
     def ternary(self, condition: Condition) -> TernaryTransition:
         return TernaryTransition(self.registry, self.source, condition)
+
+    @override
+    def idempotent(self) -> IdempotentTransition[None]:
+        if self.destination is None:
+            msg = "destination is not set"
+            raise RuntimeError(msg, self)
+
+        return IdempotentTransition(self.destination, parents=[self])
 
 
 class TernaryTransition:
@@ -263,12 +292,57 @@ class TernaryTransition:
         return self
 
 
-def extract_property_getter(prop: property) -> t.Callable[[object], bool]:
+class IdempotentTransition(t.Generic[V_co]):
+    def __init__(
+        self,
+        state: State,
+        returns: t.Optional[ValueGetter[V_co]] = None,
+        parents: t.Optional[t.Sequence[Transition]] = None,
+    ) -> None:
+        self.__state = state
+        self.__returns = returns
+        self.__parents = parents
+
+    def __call__(self, func: t.Callable[Concatenate[T, P], None]) -> t.Callable[Concatenate[T, P], V_co]:
+        returns = normalize_value_getter(self.__returns) if self.__returns is not None else None
+
+        @wraps(func)
+        def wrapper(container: T, /, *args: P.args, **kwargs: P.kwargs) -> V_co:
+            if container.current_state is not self.__state:
+                func(container, *args, **kwargs)
+
+            result = returns(container) if returns is not None else None
+
+            return result
+
+        for parent in reversed(self.__parents or ()):
+            parent(wrapper)
+
+        return self.__state(wrapper)
+
+    def returns(self, returns: ValueGetter[W_co]) -> IdempotentTransition[W_co]:
+        return IdempotentTransition(self.__state, returns, self.__parents)
+
+
+def normalize_value_getter(getter: ValueGetter[V_co]) -> t.Callable[[object], V_co]:
+    if isinstance(getter, property):  # type: ignore[misc]
+        func: t.Optional[t.Callable[[object], V_co]] = getter.fget
+
+        if func is None:
+            msg = "property fget method must be set"
+            raise TypeError(msg, getter)
+
+        return func
+
+    return getter
+
+
+def normalize_condition(condition: Condition) -> t.Callable[[object], bool]:
     # NOTE: we can assume that getter turns truthy value (to be used in `if` statement)
-    func: t.Optional[t.Callable[[object], bool]] = prop.fget
+    func = normalize_value_getter(condition)
 
-    if func is None:
-        msg = "property fget method must be set"
-        raise TypeError(msg, prop)
+    @wraps(func)
+    def wrapper(obj: object) -> bool:
+        return bool(func(obj))
 
-    return func
+    return wrapper

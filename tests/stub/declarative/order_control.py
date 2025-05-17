@@ -50,11 +50,11 @@ class OrderController(DeclarativeStateMachine):
     def add_order_item(self, item: Item) -> None:
         self.__items.append(item)
 
-    @waiting_for_order.when_not(is_order_empty).to(waiting_for_payment)
+    @waiting_for_order.to(waiting_for_payment).when_not(is_order_empty)
     def confirm_order(self) -> None:
         pass
 
-    @waiting_for_payment.when(is_payment_enough).to(processing)
+    @waiting_for_payment.to(processing).when(is_payment_enough)
     def add_order_payment(self, amount: int) -> None:
         self.__payments.append(amount)
 

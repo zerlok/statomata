@@ -4,8 +4,8 @@ import pytest
 
 from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
 from statomata.sdk import create_async_unary_sm, create_iterable_opt_sm, create_unary_sm
-from tests.stub.order_control_machine import OrderControlStateMachine, WaitingForPayment
-from tests.stub.traffic_light_machine import (
+from tests.stub.order_control import OrderControlStateMachine, WaitingForPayment
+from tests.stub.traffic_light import (
     AsyncGreen,
     AsyncTrafficState,
     AsyncTrafficStateMachine,

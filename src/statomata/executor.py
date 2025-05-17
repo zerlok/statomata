@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager, contextmanager
 
 from typing_extensions import override
 
-from statomata.abc import AbortedStateReachedError, Context, StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.abc import Context, StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.exception import AbortedStateReachedError
 
 # FIXME: find a way to set a bound `State`
 S_state = t.TypeVar("S_state")

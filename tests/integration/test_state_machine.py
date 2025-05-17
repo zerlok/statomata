@@ -2,7 +2,7 @@ import typing as t
 
 import pytest
 
-from tests.stub.order_control_machine import (
+from tests.stub.order_control import (
     OrderControlStateMachine,
     OrderEvent,
     OrderItemAdded,
@@ -10,7 +10,7 @@ from tests.stub.order_control_machine import (
     OrderProcessed,
     OrderShipped,
 )
-from tests.stub.traffic_light_machine import (
+from tests.stub.traffic_light import (
     AsyncTrafficStateMachine,
     CycleEvent,
     GoEvent,

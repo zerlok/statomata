@@ -4,7 +4,7 @@ import pytest
 
 from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
 from tests.stub.subscriber import SubscriberAsyncStub, SubscriberStub
-from tests.stub.traffic_light_machine import (
+from tests.stub.traffic_light import (
     AsyncGreen,
     AsyncRed,
     AsyncTrafficState,

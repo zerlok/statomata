@@ -7,10 +7,11 @@ from functools import singledispatchmethod, wraps
 
 from typing_extensions import Concatenate, ParamSpec, Self, override
 
-from statomata.abc import InvalidStateError, StateMachine, StateMachineSubscriber
-from statomata.declarative.builder import State
+from statomata.abc import StateMachine, StateMachineSubscriber
+from statomata.declarative.builder import State, StateMachineRegistry
 from statomata.declarative.config import Configurator, Context
 from statomata.declarative.state import MethodCall, MethodCallState
+from statomata.exception import InvalidStateError
 
 P = ParamSpec("P")
 V_co = t.TypeVar("V_co", covariant=True)
@@ -74,6 +75,8 @@ class DeclarativeStateMachine(StateMachine[State]):
         configurator: t.Optional[Configurator] = None,
         **kwargs: object,
     ) -> None:
+        super().__init_subclass__(**kwargs)
+
         conf = configurator if configurator is not None else Configurator()
         context = conf.context(cls)
 
@@ -92,7 +95,7 @@ class DeclarativeStateMachine(StateMachine[State]):
         ] = None,
         lock: t.Optional[t.ContextManager[object]] = None,
     ) -> None:
-        self.__executor = self.__conf.create_sm_executor(
+        self.__executor = self.__conf.create_executor(
             self.__context.state(initial if initial is not None else self.__context.registry.initial),
             self.__fallback,
             subscribers,
@@ -105,26 +108,31 @@ class DeclarativeStateMachine(StateMachine[State]):
         return self.__context.state_def(self.__executor.state)
 
     @classmethod
+    def state_machine_registry(cls) -> StateMachineRegistry:
+        return cls.__context.registry
+
+    @classmethod
     def __setup_transitions(cls, conf: Configurator, context: Context[Self]) -> None:
-        for source_def in context.registry.states:
-            for func, transition_defs in source_def.transitions:
-                source = context.state(source_def)
+        for func, transition_defs in context.registry.transitions.items():
+            sources = {context.state(transition_def.source) for transition_def in transition_defs}
 
-                setattr(cls, func.__name__, cls.__wrap_method(func, source))
+            setattr(cls, func.__name__, cls.__wrap_method(func, sources))
 
-                for transition_def in transition_defs:
-                    if transition_def.destination is None:
-                        msg = "destination is not set"
-                        raise ValueError(msg, transition_def)
+            for transition_def in transition_defs:
+                if transition_def.destination is None:
+                    msg = "destination is not set"
+                    raise ValueError(msg, transition_def)
 
-                    destination = context.state(transition_def.destination)
-                    source.add_transition(conf.build_transition(func, destination, transition_def.condition))
+                source = context.state(transition_def.source)
+                destination = context.state(transition_def.destination)
+
+                source.add_transition(conf.build_transition(func, destination, transition_def.condition))
 
     @classmethod
     def __setup_fallback(cls, conf: Configurator, context: Context[Self]) -> None:
         # NOTE: this is desired behavior
         @singledispatchmethod  # noqa: PLE1520
-        def handle(_self: Self, _e: Exception) -> t.Optional[MethodCallState[Self]]:
+        def handle(_self: Self, _e: Exception, /) -> t.Optional[MethodCallState[Self]]:
             return None
 
         for fallback_state_def in context.registry.fallbacks:
@@ -143,18 +151,21 @@ class DeclarativeStateMachine(StateMachine[State]):
     def __wrap_method(
         cls,
         func: t.Callable[Concatenate[Self, P], V_co],
-        source: MethodCallState[Self],
+        sources: t.Collection[MethodCallState[Self]],
     ) -> t.Callable[Concatenate[Self, P], V_co]:
         @wraps(func)
-        def wrapper(self: Self, *args: P.args, **kwargs: P.kwargs) -> V_co:
+        def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> V_co:
             # prevent concurrent method execution
             with self.__lock:
                 executor = self.__executor
                 state = executor.state
 
                 # check if current state matches transition source
-                if state is not source:
-                    raise InvalidStateError(state, source)
+                if state not in sources:
+                    raise InvalidStateError(
+                        actual=self.__context.state_def(state),
+                        expected={self.__context.state_def(source) for source in sources},
+                    )
 
                 income: MethodCall[Self, V_co] = MethodCall(self, func, args, kwargs)
 

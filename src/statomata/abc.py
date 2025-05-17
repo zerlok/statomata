@@ -3,8 +3,6 @@ from __future__ import annotations
 import abc
 import typing as t
 
-from typing_extensions import override
-
 S_contra = t.TypeVar("S_contra", contravariant=True)
 S_co = t.TypeVar("S_co", covariant=True)
 U_contra = t.TypeVar("U_contra", contravariant=True)
@@ -14,26 +12,6 @@ V_co = t.TypeVar("V_co", covariant=True)
 
 class StateMachineError(Exception):
     """Base exception for statomata package."""
-
-
-class StateMachineRuntimeError(StateMachineError, RuntimeError):
-    """Raised when state machine run fails."""
-
-
-class InvalidStateError(t.Generic[U_contra, V_co], StateMachineRuntimeError):
-    """Raised when state machine has invalid state to handle the provided income."""
-
-    def __init__(self, actual: State[U_contra, V_co], expected: t.Optional[State[U_contra, V_co]] = None) -> None:
-        self.actual = actual
-        self.expected = expected
-
-    @override
-    def __str__(self) -> str:
-        return f"actual={self.actual}; expected={self.expected}"
-
-
-class AbortedStateReachedError(StateMachineRuntimeError):
-    """Raised when running state machine after the final state was reached."""
 
 
 class Context(t.Generic[S_contra], metaclass=abc.ABCMeta):
