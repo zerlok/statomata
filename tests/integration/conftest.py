@@ -2,10 +2,8 @@ import typing as t
 
 import pytest
 
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
-from statomata.sdk import create_async_unary_sm, create_iterable_opt_sm, create_unary_sm
-from tests.stub.order_control import OrderControlStateMachine, WaitingForPayment
-from tests.stub.traffic_light import (
+from examples.state_machines.order_control_low_level import OrderControlStateMachine, WaitingForPayment
+from examples.state_machines.traffic_light_low_level import (
     AsyncGreen,
     AsyncTrafficState,
     AsyncTrafficStateMachine,
@@ -14,6 +12,8 @@ from tests.stub.traffic_light import (
     TrafficState,
     TrafficStateMachine,
 )
+from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.sdk import create_async_unary_sm, create_iterable_opt_sm, create_unary_sm
 
 
 @pytest.fixture

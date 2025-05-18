@@ -2,9 +2,7 @@ import typing as t
 
 import pytest
 
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
-from tests.stub.subscriber import SubscriberAsyncStub, SubscriberStub
-from tests.stub.traffic_light import (
+from examples.state_machines.traffic_light_low_level import (
     AsyncGreen,
     AsyncRed,
     AsyncTrafficState,
@@ -19,6 +17,8 @@ from tests.stub.traffic_light import (
     TrafficStateMachine,
     Yellow,
 )
+from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
+from tests.stub.subscriber import SubscriberAsyncStub, SubscriberStub
 
 
 @pytest.mark.parametrize(

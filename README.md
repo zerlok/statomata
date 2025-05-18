@@ -1,5 +1,3 @@
-from statomata.exception import InvalidStateErrorfrom contextlib import suppressfrom statomata.exception import InvalidStateErrorfrom contextlib import suppress
-
 # Statomata
 
 [![Latest Version](https://img.shields.io/pypi/v/statomata.svg)](https://pypi.python.org/pypi/statomata)
@@ -48,7 +46,7 @@ class OpenCloseExample(DeclarativeStateMachine):
         return "Closed"
 ```
 
-Run the state machine with a built-in automaton:
+Run the state machine:
 
 ```python
 from contextlib import suppress
@@ -88,7 +86,7 @@ class ClosedState(State[str, str]):
         return "Opened"
 ```
 
-Run the state machine with a built-in automaton:
+Run the state machine:
 
 ```python
 from contextlib import suppress
@@ -104,3 +102,12 @@ print(sm.run("close"))  # Output: Closed
 with suppress(InvalidStateError):
     sm.run("close")
 ```
+
+## Examples
+
+* order control
+  * [low level](examples/state_machines/order_control_low_level.py)
+  * [high level](examples/state_machines/order_control.py)
+* [positive number store](examples/state_machines/positive_number_store.py)
+* [traffic light](examples/state_machines/traffic_light_low_level.py)
+* [transition cases](examples/state_machines/transition_cases.py)

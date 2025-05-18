@@ -55,7 +55,7 @@ ignore = [
 
 
 [tool.mypy]
-files = ["src/", "tests/"]
+files = ["examples/", "src/", "tests/"]
 
 strict = true
 disallow_any_unimported = true

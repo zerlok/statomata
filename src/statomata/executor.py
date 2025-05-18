@@ -91,9 +91,8 @@ class StateMachineExecutor(
             yield context
 
         except Exception as err:
-            ok = self.handle_state_error(err)
-            if not ok:
-                raise
+            self.handle_state_error(err)
+            raise
 
         else:
             self.leave_state(income)
@@ -166,9 +165,8 @@ class AsyncStateMachineExecutor(
             yield context
 
         except Exception as err:
-            ok = await self.handle_state_error(err)
-            if not ok:
-                raise
+            await self.handle_state_error(err)
+            raise
 
         else:
             await self.leave_state(income)

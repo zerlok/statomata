@@ -5,7 +5,7 @@ Adopted from: https://python-statemachine.readthedocs.io/en/latest/auto_examples
 import typing as t
 from dataclasses import dataclass
 
-from typing_extensions import assert_never, override
+from typing_extensions import TypeAlias, assert_never, override
 
 from statomata.abc import Context
 from statomata.iterable import IterableOptStateMachine
@@ -32,9 +32,9 @@ class OrderShipped:
     pass
 
 
-OrderEvent = t.Union[OrderItemAdded, OrderPaymentReceived, OrderProcessed, OrderShipped]
-OrderControlState = UnaryOptState[OrderEvent, str]
-OrderControlStateMachine = IterableOptStateMachine[OrderEvent, str]
+OrderEvent: TypeAlias = t.Union[OrderItemAdded, OrderPaymentReceived, OrderProcessed, OrderShipped]
+OrderControlState: TypeAlias = UnaryOptState[OrderEvent, str]
+OrderControlStateMachine: TypeAlias = IterableOptStateMachine[OrderEvent, str]
 
 
 class WaitingForPayment(OrderControlState):

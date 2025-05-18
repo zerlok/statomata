@@ -8,7 +8,7 @@ class PositiveNumberStore(DeclarativeStateMachine):
     idle = State(initial=True)
     opened = State()
     broken = State(fallback=ValueError)
-    closed = State(final=True)
+    closed = State()
 
     def __init__(self) -> None:
         super().__init__()
@@ -18,15 +18,13 @@ class PositiveNumberStore(DeclarativeStateMachine):
     def values(self) -> t.Sequence[int]:
         return self.__nums
 
-    @property
-    def has_negative(self) -> bool:
-        return any(n < 0 for n in self.__nums)
-
-    @idle.to(opened).idempotent()
+    @idle.to(opened)
+    @opened.idempotent()
     def open(self) -> None:
         pass
 
-    @broken.to(opened).idempotent()
+    @broken.to(opened)
+    @opened.idempotent()
     def recover(self) -> None:
         self.__nums = [n for n in self.__nums if n >= 0]
 
@@ -36,6 +34,11 @@ class PositiveNumberStore(DeclarativeStateMachine):
     def close(self) -> None:
         pass
 
-    @opened.ternary(has_negative).then(broken).otherwise(opened)
+    @opened
     def extend(self, *nums: int) -> None:
-        self.__nums.extend(nums)
+        for n in nums:
+            if n < 0:
+                msg = "negative value is not allowed"
+                raise ValueError(msg, n)
+
+            self.__nums.append(n)

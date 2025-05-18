@@ -6,10 +6,30 @@ import inspect
 import threading
 import typing as t
 
-from typing_extensions import Concatenate, ParamSpec, assert_never
+from typing_extensions import ParamSpec, assert_never
 
-from statomata.declarative.builder import Condition, Fallback, State, StateMachineRegistry, normalize_condition
-from statomata.declarative.state import MethodCall, MethodCallState, MethodCallTransition
+from statomata.abc import StateMachine
+from statomata.declarative.builder import (
+    ConditionalTransitionOptions,
+    ConstantTransitionOptions,
+    Fallback,
+    KeyMappingTransitionOptions,
+    MethodFunc,
+    MethodOptions,
+    NullTransitionOptions,
+    State,
+    TransitionOptions,
+    get_method_options,
+)
+from statomata.declarative.registry import StateMachineRegistry
+from statomata.declarative.state import (
+    ConditionalMethodCallTransition,
+    ConstantMethodCallTransition,
+    KeyMappingMethodCallTransition,
+    MethodCall,
+    MethodCallState,
+    MethodCallTransition,
+)
 from statomata.executor import StateMachineExecutor
 from statomata.subscriber.registry import StateMachineSubscriberRegistry
 
@@ -17,76 +37,97 @@ if t.TYPE_CHECKING:
     from statomata.abc import StateMachineSubscriber
 
 P = ParamSpec("P")
-T = t.TypeVar("T")
 V_co = t.TypeVar("V_co", covariant=True)
+S_sm = t.TypeVar("S_sm", bound=StateMachine[State])
 
 
 class Configurator:
-    def context(self, klass: type[T]) -> Context[T]:
-        registry = self.registry(klass)
+    def context(self, sm_class: type[S_sm]) -> Context[S_sm]:
+        registry = self.registry(sm_class)
         return Context(
             registry=registry,
-            state_map={state_def: self.build_state(klass, state_def) for state_def in registry.states},
+            state_map={
+                state: self.build_state(
+                    sm_class=sm_class,
+                    name=state.name or name,
+                    initial=state.initial,
+                    final=state.final,
+                )
+                for name, state in registry.states.items()
+            },
         )
 
-    def registry(self, klass: type[T]) -> StateMachineRegistry:
-        state_defs = list[State]()
+    def registry(self, sm_class: type[S_sm]) -> StateMachineRegistry:
+        states = dict[str, State]()
+        methods = dict[MethodFunc, MethodOptions]()
 
         name: str
         obj: object
 
-        for name, obj in inspect.getmembers(klass):  # type: ignore[misc]
+        for name, obj in inspect.getmembers(sm_class):  # type: ignore[misc]
             if isinstance(obj, State):
-                if not obj.name:
-                    obj.name = name
+                state_name = obj.name = obj.name or name
+                states[state_name] = obj
+                obj.freeze()
 
-                state_defs.append(obj)
+            elif callable(obj):
+                options = get_method_options(obj)
+                if options is not None:
+                    methods[obj] = options
 
-        return StateMachineRegistry(state_defs)
+        return StateMachineRegistry(states, methods)
 
     def create_lock(self) -> t.ContextManager[object]:
         return threading.Lock()
 
     def create_executor(
         self,
-        initial: MethodCallState[T],
-        fallback: t.Optional[t.Callable[[Exception], t.Optional[MethodCallState[T]]]] = None,
+        initial: MethodCallState[S_sm],
+        fallback: t.Optional[t.Callable[[Exception], t.Optional[MethodCallState[S_sm]]]] = None,
         subscribers: t.Optional[
-            t.Sequence[StateMachineSubscriber[MethodCallState[T], MethodCall[T, object], object]]
+            t.Sequence[StateMachineSubscriber[MethodCallState[S_sm], MethodCall[S_sm, object], object]]
         ] = None,
-    ) -> StateMachineExecutor[MethodCallState[T], MethodCall[T, object], object]:
+    ) -> StateMachineExecutor[MethodCallState[S_sm], MethodCall[S_sm, object], object]:
         return StateMachineExecutor(
-            initial,
-            fallback,
-            StateMachineSubscriberRegistry(*subscribers) if subscribers else None,
+            state=initial,
+            fallback=fallback,
+            subscriber=StateMachineSubscriberRegistry(*subscribers) if subscribers else None,
         )
 
     # NOTE: only python 3.12 supports generic methods
-    def build_state(self, klass: type[T], state_def: State) -> MethodCallState[T]:  # noqa: ARG002
-        return MethodCallState[T](state_def.name)
+    def build_state(self, *, sm_class: type[S_sm], name: str, initial: bool, final: bool) -> MethodCallState[S_sm]:  # noqa: ARG002
+        return MethodCallState[S_sm](name=name, initial=initial, final=final)
 
     def build_transition(
         self,
-        func: t.Callable[Concatenate[T, P], V_co],
-        destination: MethodCallState[T],
-        condition: t.Optional[Condition] = None,
-    ) -> MethodCallTransition[T]:
-        return MethodCallTransition(
-            func=func,
-            condition=normalize_condition(condition)
-            if isinstance(condition, property)
-            else condition
-            if condition is not None
-            else truthy,
-            destination=destination,
-        )
+        options: TransitionOptions,
+        context: Context[S_sm],
+    ) -> t.Optional[MethodCallTransition[S_sm]]:
+        if isinstance(options, NullTransitionOptions):
+            return None
+
+        elif isinstance(options, ConstantTransitionOptions):
+            return ConstantMethodCallTransition(context.state(options.destination))
+
+        elif isinstance(options, ConditionalTransitionOptions):
+            return ConditionalMethodCallTransition(options.predicate, context.state(options.destination))
+
+        elif isinstance(options, KeyMappingTransitionOptions):
+            return KeyMappingMethodCallTransition(
+                key=options.key,
+                destinations={key: context.state(dest) for key, dest in options.destinations.items()},
+                default=context.state(options.default) if options.default is not None else None,
+            )
+
+        else:
+            assert_never(options)
 
     def build_fallback(
         self,
         fallback: Fallback,
-        state: MethodCallState[T],
-    ) -> tuple[t.Sequence[type[Exception]], t.Callable[[T, Exception], t.Optional[MethodCallState[T]]]]:
-        def factory(_s: T, _e: Exception, /) -> t.Optional[MethodCallState[T]]:
+        state: MethodCallState[S_sm],
+    ) -> tuple[t.Sequence[type[Exception]], t.Callable[[S_sm, Exception], t.Optional[MethodCallState[S_sm]]]]:
+        def factory(_s: S_sm, _e: Exception, /) -> t.Optional[MethodCallState[S_sm]]:
             return state
 
         if isinstance(fallback, bool):
@@ -102,11 +143,11 @@ class Configurator:
             assert_never(fallback)
 
 
-class Context(t.Generic[T]):
+class Context(t.Generic[S_sm]):
     def __init__(
         self,
         registry: StateMachineRegistry,
-        state_map: t.Mapping[State, MethodCallState[T]],
+        state_map: t.Mapping[State, MethodCallState[S_sm]],
     ) -> None:
         self.__registry = registry
         self.__state_map = state_map
@@ -116,12 +157,8 @@ class Context(t.Generic[T]):
     def registry(self) -> StateMachineRegistry:
         return self.__registry
 
-    def state(self, state_def: State) -> MethodCallState[T]:
+    def state(self, state_def: State) -> MethodCallState[S_sm]:
         return self.__state_map[state_def]
 
-    def state_def(self, state_def: MethodCallState[T]) -> State:
+    def state_def(self, state_def: MethodCallState[S_sm]) -> State:
         return self.__state_def_map[state_def]
-
-
-def truthy(_: object) -> bool:
-    return True

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import abc
-import inspect
 import typing as t
-from collections import OrderedDict, defaultdict
-from functools import cached_property, wraps
+from dataclasses import dataclass, field
+from functools import wraps
 
-from typing_extensions import Concatenate, ParamSpec, TypeAlias, override
+from typing_extensions import ParamSpec, TypeAlias, override
+
+from statomata.abc import StateMachineError
 
 P = ParamSpec("P")
 T = t.TypeVar("T")
@@ -15,168 +15,101 @@ W_co = t.TypeVar("W_co", covariant=True)
 
 
 # NOTE: base type helpers
-MethodFuncAny: TypeAlias = t.Callable[..., object]  # type: ignore[explicit-any]
+MethodFunc: TypeAlias = t.Callable[..., object]  # type: ignore[explicit-any]
 Fallback: TypeAlias = t.Union[type[Exception], t.Sequence[type[Exception]], bool]
 Condition: TypeAlias = t.Union[t.Callable[[t.Any], bool], property]  # type: ignore[explicit-any]
 ValueGetter: TypeAlias = t.Union[t.Callable[[t.Any], V_co], property]  # type: ignore[explicit-any]
 
 
-class TransitionBuilder(metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
-        """Assign transition to provided method function."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def to(self, destination: State) -> Transition:
-        """Set transition destination state."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def when(self, condition: Condition) -> Transition:
-        """Set condition."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def when_not(self, condition: Condition) -> Transition:
-        """Set negative condition."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def ternary(self, condition: Condition) -> TernaryTransition:
-        """Create ternary transition."""
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def idempotent(self) -> IdempotentTransition[None]:
-        raise NotImplementedError
+class DeclarativeStateMachineError(StateMachineError):
+    pass
 
 
-class StateMachineRegistry:
-    def __init__(self, states: t.Sequence[State]) -> None:
-        self.__states = list(states)
-
-    @property
-    def states(self) -> t.Sequence[State]:
-        return self.__states
-
-    @cached_property
-    def initial(self) -> State:
-        initials = [state for state in self.__states if state.initial]
-
-        if not initials:
-            msg = "initial state is not set"
-            raise ValueError(msg)
-
-        if len(initials) > 1:
-            msg = "initial state ambiguity"
-            raise ValueError(msg, initials)
-
-        return next(iter(initials))
-
-    @cached_property
-    def finals(self) -> t.Sequence[State]:
-        finals = [state for state in self.__states if state.final]
-
-        if not finals:
-            msg = "final state is not set"
-            raise ValueError(msg)
-
-        return finals
-
-    @cached_property
-    def fallbacks(self) -> t.Sequence[State]:
-        return [state for state in self.__states if state.fallback]
-
-    @cached_property
-    def transitions(self) -> t.Mapping[MethodFuncAny, t.Sequence[Transition]]:
-        funcs = defaultdict[MethodFuncAny, list[Transition]](list)
-
-        for state in self.__states:
-            for func, transitions in state.transitions:
-                funcs[func].extend(transitions)
-
-        return funcs
+class BuildError(DeclarativeStateMachineError):
+    pass
 
 
-class TransitionRegistry(t.Iterable[tuple[MethodFuncAny, t.Sequence["Transition"]]]):
-    def __init__(self) -> None:
-        self.__funcs = OrderedDict[MethodFuncAny, list[Transition]]()
-
-    @override
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, self.__class__):
-            return NotImplemented
-
-        return other.__funcs == self.__funcs
-
-    @override
-    def __iter__(self) -> t.Iterator[tuple[MethodFuncAny, t.Sequence[Transition]]]:
-        return iter(self.__funcs.items())
-
-    def register(self, func: MethodFuncAny, transition_def: Transition) -> None:
-        if inspect.iscoroutinefunction(func):
-            msg = "coroutine functions is not supported"
-            # NOTE: inspect returns any
-            raise TypeError(msg, func, transition_def)  # type: ignore[misc]
-
-        if func not in self.__funcs:
-            self.__funcs[func] = list[Transition]()
-
-        self.__funcs[func].append(transition_def)
+class InvalidOptionsError(BuildError):
+    pass
 
 
-class State(TransitionBuilder):
+class State:
     """Defines state for `DeclarativeStateMachine`"""
 
     def __init__(
         self,
-        name: t.Optional[str] = None,
         *,
+        name: t.Optional[str] = None,
         initial: bool = False,
         final: bool = False,
         fallback: Fallback = False,
-        transitions: t.Optional[TransitionRegistry] = None,
     ) -> None:
-        self.name = name
-        self.initial = initial
-        self.final = final
-        self.fallback = fallback
-        self.transitions = transitions if transitions is not None else TransitionRegistry()
+        self.__name = name
+        self.__initial = initial
+        self.__final = final
+        self.__fallback = fallback
+        self.__frozen = False
 
     @override
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__} at {hex(id(self))}: {self.name}>"
+        return f"<{self.__class__.__name__} at {hex(id(self))}: {self.__name}>"
 
     __repr__ = __str__
 
-    @override
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
-        """Wrap method with cycle transition."""
-        return self.to(self)(func)
+        """Assign provided method with null transition."""
+        self.__check_frozen()
+        add_method_transitions(func, NullTransitionOptions(self))
+        return func
 
-    @override
-    def to(self, destination: State) -> Transition:
-        return Transition(self.transitions, self).to(destination)
+    @property
+    def name(self) -> t.Optional[str]:
+        return self.__name
 
-    @override
-    def when(self, condition: Condition) -> Transition:
-        return Transition(self.transitions, self).when(condition)
+    @name.setter
+    def name(self, value: str) -> None:
+        self.__check_frozen()
+        self.__name = value
 
-    @override
-    def when_not(self, condition: Condition) -> Transition:
-        return Transition(self.transitions, self).when_not(condition)
+    @property
+    def initial(self) -> bool:
+        return self.__initial
 
-    @override
-    def ternary(self, condition: Condition) -> TernaryTransition:
-        return Transition(self.transitions, self).ternary(condition)
+    @property
+    def final(self) -> bool:
+        return self.__final
 
-    @override
-    def idempotent(self) -> IdempotentTransition[None]:
-        return IdempotentTransition(self)
+    @property
+    def fallback(self) -> Fallback:
+        return self.__fallback
+
+    def to(self, destination: State) -> TransitionBuilder:
+        self.__check_frozen()
+        return TransitionBuilder(self, destination)
+
+    def cycle(self) -> TransitionBuilder:
+        self.__check_frozen()
+        return self.to(self)
+
+    def ternary(self, condition: Condition) -> TernaryTransitionBuilder:
+        """Create ternary transition."""
+        self.__check_frozen()
+        return TernaryTransitionBuilder(self, condition)
+
+    def idempotent(self) -> IdempotentTransitionBuilder[None]:
+        self.__check_frozen()
+        return IdempotentTransitionBuilder(self)
+
+    def freeze(self) -> None:
+        self.__frozen = True
+
+    def __check_frozen(self) -> None:
+        if self.__frozen:
+            msg = "can't modify frozen state"
+            raise BuildError(msg, self)
 
 
-class Transition(TransitionBuilder):
+class TransitionBuilder:
     """
     Defines transition between two states for `DeclarativeStateMachine`.
 
@@ -187,40 +120,35 @@ class Transition(TransitionBuilder):
 
     def __init__(
         self,
-        registry: TransitionRegistry,
         source: State,
-        destination: t.Optional[State] = None,
-        condition: t.Optional[Condition] = None,
+        destination: State,
     ) -> None:
-        self.registry = registry
-        self.source = source
-        self.destination = destination
-        self.condition = condition
+        if source.final:
+            msg = "can't use final state as transition source"
+            raise InvalidOptionsError(msg, source)
+
+        self.__source = source
+        self.__destination = destination
+        self.__condition: t.Optional[Condition] = None
 
     @override
     def __str__(self) -> str:
-        return f"<{self.__class__.__name__}: {self.source} -> {self.destination}>"
+        return f"<{self.__class__.__name__}: {self.__source} -> {self.__destination}>"
 
     __repr__ = __str__
 
-    @override
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
-        # NOTE: `MethodFuncAny` is actually `t.Callable[..., t.Any]`
-        self.registry.register(t.cast("MethodFuncAny", func), self)
+        """Assign transition to provided method function."""
+        add_method_transitions(func, self.__build())
         return func
 
-    @override
-    def to(self, destination: State) -> Transition:
-        self.destination = destination
+    def when(self, condition: Condition) -> TransitionBuilder:
+        """Set condition."""
+        self.__condition = condition
         return self
 
-    @override
-    def when(self, condition: Condition) -> Transition:
-        self.condition = condition
-        return self
-
-    @override
-    def when_not(self, condition: Condition) -> Transition:
+    def when_not(self, condition: Condition) -> TransitionBuilder:
+        """Set negative condition."""
         func = normalize_condition(condition)
 
         @wraps(func)
@@ -229,20 +157,20 @@ class Transition(TransitionBuilder):
 
         return self.when(negate)
 
-    @override
-    def ternary(self, condition: Condition) -> TernaryTransition:
-        return TernaryTransition(self.registry, self.source, condition)
+    def ternary(self, condition: Condition) -> TernaryTransitionBuilder:
+        """Create ternary transition."""
+        return TernaryTransitionBuilder(self.__source, condition, self.__destination)
 
-    @override
-    def idempotent(self) -> IdempotentTransition[None]:
-        if self.destination is None:
-            msg = "destination is not set"
-            raise RuntimeError(msg, self)
+    def __build(self) -> TransitionOptions:
+        if self.__condition is not None:
+            return ConditionalTransitionOptions(
+                self.__source, self.__destination, normalize_condition(self.__condition)
+            )
 
-        return IdempotentTransition(self.destination, parents=[self])
+        return ConstantTransitionOptions(self.__source, self.__destination)
 
 
-class TernaryTransition:
+class TernaryTransitionBuilder:
     """
     Helper to build a transition with ternary condition.
 
@@ -267,61 +195,132 @@ class TernaryTransition:
 
     def __init__(
         self,
-        registry: TransitionRegistry,
         source: State,
         condition: Condition,
+        then: t.Optional[State] = None,
+        otherwise: t.Optional[State] = None,
     ) -> None:
+        self.__source = source
         self.__condition = condition
-        self.__then = Transition(registry, source).when(condition)
-        self.__otherwise = Transition(registry, source).when_not(condition).to(source)
+        self.__then = then
+        self.__otherwise = otherwise
 
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
-        self.__then(func)
-        self.__otherwise(func)
-
+        add_method_transitions(func, self.__build())
         return func
 
-    def then(self, state: State) -> TernaryTransition:
-        """Set destination when condition is truthy."""
-        self.__then.to(state)
+    def then(self, state: State) -> TernaryTransitionBuilder:
+        """Set destination when condition is true."""
+        self.__then = state
         return self
 
-    def otherwise(self, state: State) -> TernaryTransition:
-        """Set destination when condition is falsy."""
-        self.__otherwise.to(state)
+    def otherwise(self, state: State) -> TernaryTransitionBuilder:
+        """Set destination when condition is false."""
+        self.__otherwise = state
         return self
 
+    def __build(self) -> TransitionOptions:
+        if self.__then is None:
+            return NullTransitionOptions(self.__source)
 
-class IdempotentTransition(t.Generic[V_co]):
+        if self.__otherwise is None:
+            return ConditionalTransitionOptions(self.__source, self.__then, normalize_condition(self.__condition))
+
+        return KeyMappingTransitionOptions(
+            source=self.__source,
+            destinations={True: self.__then, False: self.__otherwise},
+            key=normalize_condition(self.__condition),
+        )
+
+
+class IdempotentTransitionBuilder(t.Generic[V_co]):
     def __init__(
         self,
-        state: State,
+        source: State,
         returns: t.Optional[ValueGetter[V_co]] = None,
-        parents: t.Optional[t.Sequence[Transition]] = None,
     ) -> None:
-        self.__state = state
+        self.__source = source
         self.__returns = returns
-        self.__parents = parents
 
-    def __call__(self, func: t.Callable[Concatenate[T, P], None]) -> t.Callable[Concatenate[T, P], V_co]:
-        returns = normalize_value_getter(self.__returns) if self.__returns is not None else None
+    def __call__(self, func: t.Callable[P, None]) -> t.Callable[P, V_co]:
+        options = get_method_options(func) or MethodOptions()
+        options.idempotent = IdempotentOptions(
+            state=self.__source,
+            returns=normalize_value_getter(self.__returns) if self.__returns is not None else None,
+        )
+        options.transitions.append(NullTransitionOptions(self.__source))
 
-        @wraps(func)
-        def wrapper(container: T, /, *args: P.args, **kwargs: P.kwargs) -> V_co:
-            if container.current_state is not self.__state:
-                func(container, *args, **kwargs)
+        set_method_options(func, options)
 
-            result = returns(container) if returns is not None else None
+        # NOTE: method will be replaced in `DeclarativeStateMachine`
+        return t.cast("t.Callable[P, V_co]", func)
 
-            return result
+    def returns(self, returns: ValueGetter[W_co]) -> IdempotentTransitionBuilder[W_co]:
+        return IdempotentTransitionBuilder(self.__source, returns)
 
-        for parent in reversed(self.__parents or ()):
-            parent(wrapper)
 
-        return self.__state(wrapper)
+@dataclass(frozen=True)
+class NullTransitionOptions:
+    source: State
 
-    def returns(self, returns: ValueGetter[W_co]) -> IdempotentTransition[W_co]:
-        return IdempotentTransition(self.__state, returns, self.__parents)
+
+@dataclass(frozen=True)
+class ConstantTransitionOptions:
+    source: State
+    destination: State
+
+
+@dataclass(frozen=True)
+class ConditionalTransitionOptions:
+    source: State
+    destination: State
+    predicate: t.Callable[[object], bool]
+
+
+@dataclass(frozen=True)
+class KeyMappingTransitionOptions(t.Generic[T]):
+    source: State
+    destinations: t.Mapping[T, State]
+    key: t.Callable[[object], T]
+    default: t.Optional[State] = None
+
+
+TransitionOptions: TypeAlias = t.Union[
+    NullTransitionOptions,
+    ConstantTransitionOptions,
+    ConditionalTransitionOptions,
+    KeyMappingTransitionOptions[object],
+]
+
+
+@dataclass(frozen=True)
+class IdempotentOptions:
+    state: State
+    returns: t.Optional[t.Callable[[object], object]] = None
+
+
+@dataclass()
+class MethodOptions:
+    transitions: list[TransitionOptions] = field(default_factory=list[TransitionOptions])
+    idempotent: t.Optional[IdempotentOptions] = None
+
+
+__METHOD_OPTIONS_ATTR: t.Final[str] = "__statomata_method_options__"
+
+
+def get_method_options(func: t.Callable[P, V_co]) -> t.Optional[MethodOptions]:
+    options: object = getattr(func, __METHOD_OPTIONS_ATTR, None)
+    return options if isinstance(options, MethodOptions) else None
+
+
+def set_method_options(func: t.Callable[P, V_co], options: MethodOptions) -> None:
+    setattr(func, __METHOD_OPTIONS_ATTR, options)
+
+
+def add_method_transitions(func: t.Callable[P, V_co], *transitions: TransitionOptions) -> None:
+    options = get_method_options(func) or MethodOptions()
+    set_method_options(func, options)
+    options.transitions.extend(transitions)
 
 
 def normalize_value_getter(getter: ValueGetter[V_co]) -> t.Callable[[object], V_co]:
