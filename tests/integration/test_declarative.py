@@ -65,7 +65,7 @@ class TestPositiveNumberStore:
         assert sm.values == [1, 2, 3, 4, 5]
 
         # fallback to broken state
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="negative value is not allowed"):
             sm.extend(6, -1, 7)
 
         assert sm.values == [1, 2, 3, 4, 5, 6]

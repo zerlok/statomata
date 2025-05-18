@@ -34,7 +34,14 @@ class InvalidOptionsError(BuildError):
 
 
 class State:
-    """Defines state for `DeclarativeStateMachine`"""
+    """
+    Defines state for `DeclarativeStateMachine`.
+
+    - name -- a custom name for a state
+    - initial -- instantiate state machine with this state
+    - final -- abort state machine after transitioning into this state
+    - fallback -- specify exceptions to handle during state machine executions
+    """
 
     def __init__(
         self,
@@ -84,10 +91,12 @@ class State:
         return self.__fallback
 
     def to(self, destination: State) -> TransitionBuilder:
+        """Create transition to specified destination."""
         self.__check_frozen()
         return TransitionBuilder(self, destination)
 
     def cycle(self) -> TransitionBuilder:
+        """Create cycle transition."""
         self.__check_frozen()
         return self.to(self)
 
@@ -97,10 +106,17 @@ class State:
         return TernaryTransitionBuilder(self, condition)
 
     def idempotent(self) -> IdempotentTransitionBuilder[None]:
+        """
+        Build idempotent transition for a method.
+
+        The wrapped method invocation will be ignored when state machine is in `source` state.
+        See `DeclarativeStateMachine` for mode details.
+        """
         self.__check_frozen()
         return IdempotentTransitionBuilder(self)
 
     def freeze(self) -> None:
+        """Freeze the state, denying any modifications."""
         self.__frozen = True
 
     def __check_frozen(self) -> None:
@@ -112,6 +128,10 @@ class State:
 class TransitionBuilder:
     """
     Defines transition between two states for `DeclarativeStateMachine`.
+
+    By default, the transition is constant - the state machine will perform the transition from source to destination.
+
+    If condition is specified - the state machine will check the transition and if true - perform the transition.
 
     You don't have to instantiate this class directly, see `State` methods and example in `DeclarativeStateMachine`.
 
@@ -172,7 +192,9 @@ class TransitionBuilder:
 
 class TernaryTransitionBuilder:
     """
-    Helper to build a transition with ternary condition.
+    Builder for ternary condition.
+
+    If condition is true - transit to `then` state, otherwise - transit to `otherwise` state if it is specified.
 
     In the following example `transit_ternary` and `transit_s2_or_s3` methods perform transition in the same way:
 
@@ -234,6 +256,14 @@ class TernaryTransitionBuilder:
 
 
 class IdempotentTransitionBuilder(t.Generic[V_co]):
+    """
+    Build the idempotent transition.
+
+    If state machine is in source state - the wrapped method won't be executed.
+
+    If `returns` is specified - it will be executed in either way and its value will be returned as `outcome`.
+    """
+
     def __init__(
         self,
         source: State,

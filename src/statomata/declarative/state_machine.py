@@ -25,16 +25,27 @@ class DeclarativeStateMachine(StateMachine[State]):
     """
     Base class to set up state machines in declarative way.
 
-    Derivatives should define states: `State` class attributes (one state must be initial); and methods with state
-    transitions.
+    Derivatives should define states: `State` class attributes; and methods with state transitions.
 
-    Each instance will keep its own state. To perform transitions - invoke appropriate methods with transition
-    decorators. Those methods are executed with the following alogirthm:
+    Instances of this class are isolated (each instance keeps and manages its own state). You can use `self` parameter
+    in transition methods and to access custom properties and methods.
+
+    States properties:
+
+    - only one state should be initial -- the state machine will start from this state by default.
+    - some states may be final -- the state machine will abort execution after transition is made into final state.
+    - fallback states will allow to catch appropriate exceptions, the state machine will transition into appropriate
+      fallback state.
+
+    To perform transitions - invoke appropriate methods with transition decorators. Those methods are executed using the
+    following alogirthm:
 
     1. Acquire the instance lock to prevent other method concurrent execution.
     2. Check if current state matches the transition source. Raise `InvalidStateError` on mismatch.
     3. Enter the state (invokes appropriate subscribers, see `StateMachineExecutor` for more info).
-    4. Invoke specified method function (see `MethodCallState` for more info) - provides state `outcome`.
+    4. Invoke specified method function (see `MethodCallState` for more info) - provides state `outcome`. If method has
+       idempotent state and state machine is in that state -- this step is skipped, but if `returns` is set - its value
+       will be returned as outcome in either way.
     5. Check transitions to perform transition into new state (see `MethodCallState` for more info).
     6. Notify subscribers about `outcome`.
     7. Leave the state (invokes appropriate subscribers, see `StateMachineExecutor` for more info).
@@ -43,13 +54,22 @@ class DeclarativeStateMachine(StateMachine[State]):
 
     Simple state machine defintion example:
 
-    >>> class SimpleSM(DeclarativeStateMachine):
+    >>> class SimpleSMExample(DeclarativeStateMachine):
     ...     s1, s2, s3 = State(initial=True), State(), State()
     ...
-    ...     def __init__(self, name: str) -> None:
+    ...     def __init__(self, name: str, *, allow_s3: bool = False) -> None:
     ...         super().__init__()
     ...         self.__name = name
     ...         self.__cycles = 0
+    ...         self.__allow_s3 = allow_s3
+    ...
+    ...     @property
+    ...     def cycles(self) -> int:
+    ...         return self.__cycles
+    ...
+    ...     @property
+    ...     def can_transit_to_s3(self) -> bool:
+    ...         return True
     ...
     ...     @s1 # stay in `s1` state (cycle transition)
     ...     def transit_cycle(self) -> None:
@@ -57,19 +77,16 @@ class DeclarativeStateMachine(StateMachine[State]):
     ...         self.__cycles += 1
     ...
     ...     @s1.to(s2) # transit from `s1` to `s2`
-    ...     def transit_from_s1_to_s2(self) -> int:
-    ...         return self.__cycles
-    ...
-    ...     @property
-    ...     def can_transit_to_s3(self) -> bool:
-    ...         return True
+    ...     @s2.idempotent().returns(cycles)
+    ...     def transit_from_s1_to_s2(self) -> None:
+    ...         pass
     ...
     ...     @s2.to(s3).when(can_transit_to_s3) # transit from `s2` to `s3` if `can_transit_to_s3`
     ...     def transit_from_s2_to_s3(self, p1: str, p2: str) -> str:
     ...         return ".".join((p1, p2, self.__name))
     """
 
-    __conf: t.ClassVar[Configurator]
+    __configurator: t.ClassVar[Configurator]
     __context: t.ClassVar[Context[Self]]
     __fallback: t.ClassVar[t.Callable[[Self, Exception], t.Optional[MethodCallState[Self]]]]
 
@@ -88,7 +105,7 @@ class DeclarativeStateMachine(StateMachine[State]):
         cls.__setup_fallback(conf, context)
 
         # save all context
-        cls.__conf = conf
+        cls.__configurator = conf
         cls.__context = t.cast("Context[Self]", context)
 
     def __init__(
@@ -99,12 +116,12 @@ class DeclarativeStateMachine(StateMachine[State]):
         ] = None,
         lock: t.Optional[t.ContextManager[object]] = None,
     ) -> None:
-        self.__executor = self.__conf.create_executor(
+        self.__executor = self.__configurator.create_executor(
             initial=self.__context.state(initial if initial is not None else self.__context.registry.initial),
             fallback=self.__fallback,
             subscribers=subscribers,
         )
-        self.__lock = lock if lock is not None else self.__conf.create_lock()
+        self.__lock = lock if lock is not None else self.__configurator.create_lock()
 
     @override
     @property
