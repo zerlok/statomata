@@ -14,7 +14,8 @@ management logic.
 ## Features
 
 - 🧠 **State Interface & Context:** Follow the state machine OOP pattern with clear, isolated state definitions.
-- ⚡ **Built-in Automata:** feel free to use one of the predefined automata classes from SDK.
+- ⚡ **Built-in Automata:** feel free to use one of the predefined automata classes from SDK (sync / async; unary /
+  iterable)
 - 🏗 **Custom Automata Support:** Build your own automata with custom state management logic. You can choose declarative
   style or built custom automata using provided interfaces.
 - ✅ **Strict Typing:** Designed for type safety and clarity with full type hints.
@@ -36,11 +37,11 @@ from statomata.declarative import DeclarativeStateMachine, State
 class OpenCloseExample(DeclarativeStateMachine):
     closed = State(initial=True)
     opened = State()
-    
+
     @closed.to(opened)
     def open(self) -> str:
         return "Opened"
-    
+
     @opened.to(closed)
     def close(self) -> str:
         return "Closed"
@@ -72,7 +73,7 @@ class OpenState(State[str, str]):
     def handle(self, income: str, context: Context[State[str, str]]) -> str:
         if income != "close":
             raise InvalidStateError(self, message="already opened")
-        
+
         context.set_state(ClosedState())
         return "Closed"
 
@@ -80,7 +81,7 @@ class OpenState(State[str, str]):
 class ClosedState(State[str, str]):
     def handle(self, income: str, context: Context[State[str, str]]) -> str:
         if income != "open":
-            raise InvalidStateError(self,message="already closed")
+            raise InvalidStateError(self, message="already closed")
 
         context.set_state(OpenState())
         return "Opened"
@@ -106,8 +107,9 @@ with suppress(InvalidStateError):
 ## Examples
 
 * order control
-  * [low level](examples/state_machines/order_control_low_level.py)
-  * [high level](examples/state_machines/order_control.py)
+    * [low level](examples/state_machines/order_control_low_level.py)
+    * [high level](examples/state_machines/order_control.py)
 * [positive number store](examples/state_machines/positive_number_store.py)
 * [traffic light](examples/state_machines/traffic_light_low_level.py)
 * [transition cases](examples/state_machines/transition_cases.py)
+* [outcome cases](examples/state_machines/outcome_cases.py)
