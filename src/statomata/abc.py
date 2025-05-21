@@ -100,7 +100,7 @@ class StateMachineSubscriber(t.Generic[S_contra, U_contra, V_contra], metaclass=
         raise NotImplementedError
 
 
-class StateMachineAsyncSubscriber(t.Generic[S_contra, U_contra, V_contra], metaclass=abc.ABCMeta):
+class AsyncStateMachineSubscriber(t.Generic[S_contra, U_contra, V_contra], metaclass=abc.ABCMeta):
     @abc.abstractmethod
     async def notify_initial(self, state: S_contra) -> None:
         raise NotImplementedError

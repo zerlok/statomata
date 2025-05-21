@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager, contextmanager
 
 from typing_extensions import override
 
-from statomata.abc import Context, StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.abc import AsyncStateMachineSubscriber, Context, StateMachineSubscriber
 from statomata.exception import AbortedStateReachedError
 
 # FIXME: find a way to set a bound `State`
@@ -153,7 +153,7 @@ class AsyncStateMachineExecutor(
         self,
         state: S_state,
         fallback: t.Optional[t.Callable[[Exception], t.Optional[S_state]]] = None,
-        subscriber: t.Optional[StateMachineAsyncSubscriber[S_state, U_contra, V_contra]] = None,
+        subscriber: t.Optional[AsyncStateMachineSubscriber[S_state, U_contra, V_contra]] = None,
     ) -> None:
         super().__init__(state, fallback)
         self.__subscriber = subscriber

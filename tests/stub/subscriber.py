@@ -2,7 +2,7 @@ import typing as t
 
 from typing_extensions import override
 
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.abc import AsyncStateMachineSubscriber, StateMachineSubscriber
 
 S_contra = t.TypeVar("S_contra", contravariant=True)
 U_contra = t.TypeVar("U_contra", contravariant=True)
@@ -52,7 +52,7 @@ class SubscriberStub(StateMachineSubscriber[S_contra, U_contra, V_contra]):
         return self.__transition
 
 
-class SubscriberAsyncStub(StateMachineAsyncSubscriber[S_contra, U_contra, V_contra]):
+class AsyncSubscriberStub(AsyncStateMachineSubscriber[S_contra, U_contra, V_contra]):
     def __init__(self) -> None:
         self.__events = list[tuple[S_contra, str]]()
         self.__transition = list[tuple[S_contra, S_contra]]()

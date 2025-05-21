@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import typing as t
+from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import wraps
 
 from typing_extensions import ParamSpec, TypeAlias, override
 
 from statomata.abc import StateMachineError
+from statomata.transition import ConditionalTransition, ConstantTransition, MappingTransition, Transition
 
 P = ParamSpec("P")
 T = t.TypeVar("T")
@@ -15,6 +17,7 @@ W_co = t.TypeVar("W_co", covariant=True)
 
 
 # NOTE: base type helpers
+MethodTransition: TypeAlias = Transition[object, object]
 MethodFunc: TypeAlias = t.Callable[..., object]  # type: ignore[explicit-any]
 Fallback: TypeAlias = t.Union[type[Exception], t.Sequence[type[Exception]], bool]
 Condition: TypeAlias = t.Union[t.Callable[[t.Any], bool], property]  # type: ignore[explicit-any]
@@ -65,8 +68,8 @@ class State:
 
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
         """Assign provided method with null transition."""
-        self.__check_frozen()
-        add_method_transitions(func, NullTransitionOptions(self))
+        self.__check_not_frozen()
+        update_method_options(func, self)
         return func
 
     @property
@@ -75,7 +78,7 @@ class State:
 
     @name.setter
     def name(self, value: str) -> None:
-        self.__check_frozen()
+        self.__check_not_frozen()
         self.__name = value
 
     @property
@@ -92,17 +95,17 @@ class State:
 
     def to(self, destination: State) -> TransitionBuilder:
         """Create transition to specified destination."""
-        self.__check_frozen()
+        self.__check_not_frozen()
         return TransitionBuilder(self, destination)
 
     def cycle(self) -> TransitionBuilder:
         """Create cycle transition."""
-        self.__check_frozen()
+        self.__check_not_frozen()
         return self.to(self)
 
     def ternary(self, condition: Condition) -> TernaryTransitionBuilder:
         """Create ternary transition."""
-        self.__check_frozen()
+        self.__check_not_frozen()
         return TernaryTransitionBuilder(self, condition)
 
     def idempotent(self) -> IdempotentTransitionBuilder[None]:
@@ -112,14 +115,14 @@ class State:
         The wrapped method invocation will be ignored when state machine is in `source` state.
         See `DeclarativeStateMachine` for mode details.
         """
-        self.__check_frozen()
+        self.__check_not_frozen()
         return IdempotentTransitionBuilder(self)
 
     def freeze(self) -> None:
         """Freeze the state, denying any modifications."""
         self.__frozen = True
 
-    def __check_frozen(self) -> None:
+    def __check_not_frozen(self) -> None:
         if self.__frozen:
             msg = "can't modify frozen state"
             raise BuildError(msg, self)
@@ -159,7 +162,7 @@ class TransitionBuilder:
 
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
         """Assign transition to provided method function."""
-        add_method_transitions(func, self.__build())
+        update_method_options(func, self.__source, self.__build())
         return func
 
     def when(self, condition: Condition) -> TransitionBuilder:
@@ -181,13 +184,11 @@ class TransitionBuilder:
         """Create ternary transition."""
         return TernaryTransitionBuilder(self.__source, condition, self.__destination)
 
-    def __build(self) -> TransitionOptions:
+    def __build(self) -> t.Sequence[MethodTransition]:
         if self.__condition is not None:
-            return ConditionalTransitionOptions(
-                self.__source, self.__destination, normalize_condition(self.__condition)
-            )
+            return [ConditionalTransition(normalize_condition(self.__condition), self.__destination)]
 
-        return ConstantTransitionOptions(self.__source, self.__destination)
+        return [ConstantTransition(self.__destination)]
 
 
 class TernaryTransitionBuilder:
@@ -228,7 +229,7 @@ class TernaryTransitionBuilder:
         self.__otherwise = otherwise
 
     def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
-        add_method_transitions(func, self.__build())
+        update_method_options(func, self.__source, self.__build())
         return func
 
     def then(self, state: State) -> TernaryTransitionBuilder:
@@ -241,18 +242,14 @@ class TernaryTransitionBuilder:
         self.__otherwise = state
         return self
 
-    def __build(self) -> TransitionOptions:
+    def __build(self) -> t.Sequence[MethodTransition]:
         if self.__then is None:
-            return NullTransitionOptions(self.__source)
+            return []
 
         if self.__otherwise is None:
-            return ConditionalTransitionOptions(self.__source, self.__then, normalize_condition(self.__condition))
+            return [ConditionalTransition(normalize_condition(self.__condition), self.__then)]
 
-        return KeyMappingTransitionOptions(
-            source=self.__source,
-            destinations={True: self.__then, False: self.__otherwise},
-            key=normalize_condition(self.__condition),
-        )
+        return [MappingTransition(normalize_condition(self.__condition), {True: self.__then, False: self.__otherwise})]
 
 
 class IdempotentTransitionBuilder(t.Generic[V_co]):
@@ -273,14 +270,13 @@ class IdempotentTransitionBuilder(t.Generic[V_co]):
         self.__returns = returns
 
     def __call__(self, func: t.Callable[P, None]) -> t.Callable[P, V_co]:
-        options = get_method_options(func) or MethodOptions()
-        options.idempotent = IdempotentOptions(
-            state=self.__source,
-            returns=normalize_value_getter(self.__returns) if self.__returns is not None else None,
+        update_method_options(
+            func=func,
+            idempotent=IdempotentOptions(
+                state=self.__source,
+                returns=normalize_value_getter(self.__returns) if self.__returns is not None else None,
+            ),
         )
-        options.transitions.append(NullTransitionOptions(self.__source))
-
-        set_method_options(func, options)
 
         # NOTE: method will be replaced in `DeclarativeStateMachine`
         return t.cast("t.Callable[P, V_co]", func)
@@ -289,49 +285,19 @@ class IdempotentTransitionBuilder(t.Generic[V_co]):
         return IdempotentTransitionBuilder(self.__source, returns)
 
 
-@dataclass(frozen=True)
-class NullTransitionOptions:
-    source: State
-
-
-@dataclass(frozen=True)
-class ConstantTransitionOptions:
-    source: State
-    destination: State
-
-
-@dataclass(frozen=True)
-class ConditionalTransitionOptions:
-    source: State
-    destination: State
-    predicate: t.Callable[[object], bool]
-
-
-@dataclass(frozen=True)
-class KeyMappingTransitionOptions(t.Generic[T]):
-    source: State
-    destinations: t.Mapping[T, State]
-    key: t.Callable[[object], T]
-    default: t.Optional[State] = None
-
-
-TransitionOptions: TypeAlias = t.Union[
-    NullTransitionOptions,
-    ConstantTransitionOptions,
-    ConditionalTransitionOptions,
-    KeyMappingTransitionOptions[object],
-]
-
-
-@dataclass(frozen=True)
+@dataclass()
 class IdempotentOptions:
     state: State
     returns: t.Optional[t.Callable[[object], object]] = None
 
 
+def _create_transitions() -> dict[State, list[MethodTransition]]:
+    return defaultdict[State, list[MethodTransition]](list)
+
+
 @dataclass()
 class MethodOptions:
-    transitions: list[TransitionOptions] = field(default_factory=list[TransitionOptions])
+    transitions: dict[State, list[MethodTransition]] = field(default_factory=_create_transitions)
     idempotent: t.Optional[IdempotentOptions] = None
 
 
@@ -343,14 +309,23 @@ def get_method_options(func: t.Callable[P, V_co]) -> t.Optional[MethodOptions]:
     return options if isinstance(options, MethodOptions) else None
 
 
-def set_method_options(func: t.Callable[P, V_co], options: MethodOptions) -> None:
-    setattr(func, __METHOD_OPTIONS_ATTR, options)
+def update_method_options(
+    func: t.Callable[P, V_co],
+    source: t.Optional[State] = None,
+    transitions: t.Optional[t.Sequence[MethodTransition]] = None,
+    idempotent: t.Optional[IdempotentOptions] = None,
+) -> None:
+    options = get_method_options(func)
 
+    if options is None:
+        options = MethodOptions()
+        setattr(func, __METHOD_OPTIONS_ATTR, options)
 
-def add_method_transitions(func: t.Callable[P, V_co], *transitions: TransitionOptions) -> None:
-    options = get_method_options(func) or MethodOptions()
-    set_method_options(func, options)
-    options.transitions.extend(transitions)
+    if source is not None:
+        options.transitions[source].extend(transitions or ())
+
+    if idempotent is not None:
+        options.idempotent = idempotent
 
 
 def normalize_value_getter(getter: ValueGetter[V_co]) -> t.Callable[[object], V_co]:
@@ -368,10 +343,4 @@ def normalize_value_getter(getter: ValueGetter[V_co]) -> t.Callable[[object], V_
 
 def normalize_condition(condition: Condition) -> t.Callable[[object], bool]:
     # NOTE: we can assume that getter turns truthy value (to be used in `if` statement)
-    func = normalize_value_getter(condition)
-
-    @wraps(func)
-    def wrapper(obj: object) -> bool:
-        return bool(func(obj))
-
-    return wrapper
+    return normalize_value_getter(condition)

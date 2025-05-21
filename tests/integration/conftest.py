@@ -12,7 +12,7 @@ from examples.state_machines.traffic_light_low_level import (
     TrafficState,
     TrafficStateMachine,
 )
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.abc import AsyncStateMachineSubscriber, StateMachineSubscriber
 from statomata.sdk import create_async_unary_sm, create_iterable_opt_sm, create_unary_sm
 
 
@@ -29,13 +29,13 @@ def traffic_light_machine(
 
 
 @pytest.fixture
-def traffic_light_subscribers_async() -> t.Sequence[StateMachineAsyncSubscriber[AsyncTrafficState, TrafficEvent, str]]:
+def traffic_light_subscribers_async() -> t.Sequence[AsyncStateMachineSubscriber[AsyncTrafficState, TrafficEvent, str]]:
     return []
 
 
 @pytest.fixture
 def traffic_light_machine_async(
-    traffic_light_subscribers_async: t.Sequence[StateMachineAsyncSubscriber[AsyncTrafficState, TrafficEvent, str]],
+    traffic_light_subscribers_async: t.Sequence[AsyncStateMachineSubscriber[AsyncTrafficState, TrafficEvent, str]],
 ) -> AsyncTrafficStateMachine:
     return create_async_unary_sm(AsyncGreen(), subscribers=traffic_light_subscribers_async)
 

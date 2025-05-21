@@ -3,7 +3,7 @@ import typing as t
 
 from typing_extensions import override
 
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.abc import AsyncStateMachineSubscriber, StateMachineSubscriber
 
 
 class LoggingSubscriber(StateMachineSubscriber[object, object, object]):
@@ -39,7 +39,7 @@ class LoggingSubscriber(StateMachineSubscriber[object, object, object]):
         self.__log.info("finished at %s", state)
 
 
-class AsyncLoggingSubscriber(StateMachineAsyncSubscriber[object, object, object]):
+class AsyncLoggingSubscriber(AsyncStateMachineSubscriber[object, object, object]):
     def __init__(self, log: t.Optional[logging.Logger] = None) -> None:
         self.__log = log or logging.getLogger(__name__)
 

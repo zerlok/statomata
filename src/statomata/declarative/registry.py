@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import typing as t
 from functools import cached_property
 
@@ -17,10 +18,6 @@ class StateMachineRegistry:
     @property
     def states(self) -> t.Mapping[str, State]:
         return self.__states
-
-    @property
-    def methods(self) -> t.Mapping[MethodFunc, MethodOptions]:
-        return self.__methods
 
     @cached_property
     def initial(self) -> State:
@@ -49,3 +46,11 @@ class StateMachineRegistry:
     @cached_property
     def fallbacks(self) -> t.Sequence[State]:
         return [state for state in self.__states.values() if state.fallback]
+
+    @property
+    def methods(self) -> t.Mapping[MethodFunc, MethodOptions]:
+        return self.__methods
+
+    @cached_property
+    def is_async(self) -> bool:
+        return any(inspect.iscoroutinefunction(func) or inspect.isasyncgenfunction(func) for func in self.__methods)

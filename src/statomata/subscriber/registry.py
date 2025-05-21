@@ -3,7 +3,7 @@ import typing as t
 
 from typing_extensions import override
 
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.abc import AsyncStateMachineSubscriber, StateMachineSubscriber
 
 S_contra = t.TypeVar("S_contra", contravariant=True)
 U_contra = t.TypeVar("U_contra", contravariant=True)
@@ -58,17 +58,17 @@ class StateMachineSubscriberRegistry(
             sub.notify_final(state)
 
 
-class StateMachineAsyncSubscriberRegistry(
+class AsyncStateMachineSubscriberRegistry(
     t.Generic[S_contra, U_contra, V_contra],
-    StateMachineAsyncSubscriber[S_contra, U_contra, V_contra],
+    AsyncStateMachineSubscriber[S_contra, U_contra, V_contra],
 ):
-    def __init__(self, *subscribers: StateMachineAsyncSubscriber[S_contra, U_contra, V_contra]) -> None:
+    def __init__(self, *subscribers: AsyncStateMachineSubscriber[S_contra, U_contra, V_contra]) -> None:
         self.__subscribers = set(subscribers)
 
-    def register(self, *subscribers: StateMachineAsyncSubscriber[S_contra, U_contra, V_contra]) -> None:
+    def register(self, *subscribers: AsyncStateMachineSubscriber[S_contra, U_contra, V_contra]) -> None:
         self.__subscribers.update(subscribers)
 
-    def unregister(self, *subscribers: StateMachineAsyncSubscriber[S_contra, U_contra, V_contra]) -> None:
+    def unregister(self, *subscribers: AsyncStateMachineSubscriber[S_contra, U_contra, V_contra]) -> None:
         self.__subscribers.difference_update(subscribers)
 
     @override

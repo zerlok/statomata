@@ -17,8 +17,8 @@ from examples.state_machines.traffic_light_low_level import (
     TrafficStateMachine,
     Yellow,
 )
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
-from tests.stub.subscriber import SubscriberAsyncStub, SubscriberStub
+from statomata.abc import AsyncStateMachineSubscriber, StateMachineSubscriber
+from tests.stub.subscriber import AsyncSubscriberStub, SubscriberStub
 
 
 @pytest.mark.parametrize(
@@ -83,7 +83,7 @@ def test_subscriber_notify_invoked_ok(
 )
 async def test_subscriber_async_notify_invoked_ok(
     traffic_light_machine_async: AsyncTrafficStateMachine,
-    subscriber_async: SubscriberAsyncStub[AsyncTrafficState, TrafficEvent, str],
+    subscriber_async: AsyncSubscriberStub[AsyncTrafficState, TrafficEvent, str],
     incomes: t.Sequence[TrafficEvent],
     expected_events: t.Sequence[tuple[type[AsyncTrafficState], str]],
 ) -> None:
@@ -106,12 +106,12 @@ def traffic_light_subscribers(
 
 
 @pytest.fixture
-def subscriber_async() -> SubscriberAsyncStub[AsyncTrafficState, TrafficEvent, str]:
-    return SubscriberAsyncStub[AsyncTrafficState, TrafficEvent, str]()
+def subscriber_async() -> AsyncSubscriberStub[AsyncTrafficState, TrafficEvent, str]:
+    return AsyncSubscriberStub[AsyncTrafficState, TrafficEvent, str]()
 
 
 @pytest.fixture
 def traffic_light_subscribers_async(
-    subscriber_async: SubscriberAsyncStub[AsyncTrafficState, TrafficEvent, str],
-) -> t.Sequence[StateMachineAsyncSubscriber[AsyncTrafficState, TrafficEvent, str]]:
+    subscriber_async: AsyncSubscriberStub[AsyncTrafficState, TrafficEvent, str],
+) -> t.Sequence[AsyncStateMachineSubscriber[AsyncTrafficState, TrafficEvent, str]]:
     return [subscriber_async]

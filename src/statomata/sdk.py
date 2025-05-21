@@ -1,6 +1,6 @@
 import typing as t
 
-from statomata.abc import StateMachineAsyncSubscriber, StateMachineSubscriber
+from statomata.abc import AsyncStateMachineSubscriber, StateMachineSubscriber
 from statomata.executor import AsyncStateMachineExecutor, StateMachineExecutor
 from statomata.iterable import (
     AsyncIterableState,
@@ -9,7 +9,7 @@ from statomata.iterable import (
     IterableState,
     IterableStateMachine,
 )
-from statomata.subscriber.registry import StateMachineAsyncSubscriberRegistry, StateMachineSubscriberRegistry
+from statomata.subscriber.registry import AsyncStateMachineSubscriberRegistry, StateMachineSubscriberRegistry
 from statomata.unary import AsyncUnaryState, AsyncUnaryStateMachine, UnaryOptState, UnaryState, UnaryStateMachine
 
 S_contra = t.TypeVar("S_contra", contravariant=True)
@@ -30,10 +30,10 @@ def create_sm_executor(
 def create_sm_async_executor(
     initial: S_contra,
     fallback: t.Optional[t.Callable[[Exception], t.Optional[S_contra]]] = None,
-    subscribers: t.Optional[t.Sequence[StateMachineAsyncSubscriber[S_contra, U_contra, V_co]]] = None,
+    subscribers: t.Optional[t.Sequence[AsyncStateMachineSubscriber[S_contra, U_contra, V_co]]] = None,
 ) -> AsyncStateMachineExecutor[S_contra, U_contra, V_co]:
     return AsyncStateMachineExecutor(
-        initial, fallback, StateMachineAsyncSubscriberRegistry(*subscribers) if subscribers else None
+        initial, fallback, AsyncStateMachineSubscriberRegistry(*subscribers) if subscribers else None
     )
 
 
@@ -49,7 +49,7 @@ def create_async_unary_sm(
     initial: AsyncUnaryState[U_contra, V_co],
     fallback: t.Optional[t.Callable[[Exception], t.Optional[AsyncUnaryState[U_contra, V_co]]]] = None,
     subscribers: t.Optional[
-        t.Sequence[StateMachineAsyncSubscriber[AsyncUnaryState[U_contra, V_co], U_contra, V_co]]
+        t.Sequence[AsyncStateMachineSubscriber[AsyncUnaryState[U_contra, V_co], U_contra, V_co]]
     ] = None,
 ) -> AsyncUnaryStateMachine[U_contra, V_co]:
     return AsyncUnaryStateMachine(create_sm_async_executor(initial, fallback, subscribers))
@@ -67,7 +67,7 @@ def create_async_iterable_sm(
     initial: AsyncIterableState[U_contra, V_co],
     fallback: t.Optional[t.Callable[[Exception], t.Optional[AsyncIterableState[U_contra, V_co]]]] = None,
     subscribers: t.Optional[
-        t.Sequence[StateMachineAsyncSubscriber[AsyncIterableState[U_contra, V_co], U_contra, V_co]]
+        t.Sequence[AsyncStateMachineSubscriber[AsyncIterableState[U_contra, V_co], U_contra, V_co]]
     ] = None,
 ) -> AsyncIterableStateMachine[U_contra, V_co]:
     return AsyncIterableStateMachine(create_sm_async_executor(initial, fallback, subscribers))
