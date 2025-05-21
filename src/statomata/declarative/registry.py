@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import typing as t
 from functools import cached_property
 
@@ -50,7 +49,3 @@ class StateMachineRegistry:
     @property
     def methods(self) -> t.Mapping[MethodFunc, MethodOptions]:
         return self.__methods
-
-    @cached_property
-    def is_async(self) -> bool:
-        return any(inspect.iscoroutinefunction(func) or inspect.isasyncgenfunction(func) for func in self.__methods)

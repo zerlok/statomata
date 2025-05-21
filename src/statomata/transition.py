@@ -6,7 +6,8 @@ from collections import defaultdict
 
 from typing_extensions import override
 
-from statomata.abc import Context
+if t.TYPE_CHECKING:
+    from statomata.abc import Context
 
 K = t.TypeVar("K", bound=t.Hashable)
 U_contra = t.TypeVar("U_contra", contravariant=True)
@@ -17,6 +18,12 @@ S_co = t.TypeVar("S_co", covariant=True)
 class Transition(t.Generic[U_contra, S_contra], metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def perform(self, income: U_contra, context: Context[S_contra]) -> bool:
+        raise NotImplementedError
+
+
+class AsyncTransition(t.Generic[U_contra, S_contra], metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    async def perform(self, income: U_contra, context: Context[S_contra]) -> bool:
         raise NotImplementedError
 
 
@@ -113,6 +120,15 @@ class MappingTransition(t.Generic[K, U_contra, S_contra], Transition[U_contra, S
         return False
 
 
+class Sync2AsyncTransitionAdapter(t.Generic[U_contra, S_contra], AsyncTransition[U_contra, S_contra]):
+    def __init__(self, inner: Transition[U_contra, S_contra]) -> None:
+        self.__inner = inner
+
+    @override
+    async def perform(self, income: U_contra, context: Context[S_contra]) -> bool:
+        return self.__inner.perform(income, context)
+
+
 class TransitionExecutor(t.Generic[K, U_contra, S_co]):
     def __init__(
         self,
@@ -133,4 +149,33 @@ class TransitionExecutor(t.Generic[K, U_contra, S_co]):
         return None
 
     def add_transitions(self, key: K, *values: Transition[U_contra, S_co]) -> None:
+        self.__transitions[key].extend(values)
+
+
+class AsyncTransitionExecutor(t.Generic[K, U_contra, S_co]):
+    def __init__(
+        self,
+        transitions: t.Optional[t.Mapping[K, t.Sequence[AsyncTransition[U_contra, S_co]]]] = None,
+    ) -> None:
+        self.__transitions = defaultdict[K, list[AsyncTransition[U_contra, S_co]]](list)
+
+        for tr_key, tr_values in (transitions or {}).items():
+            self.add_transitions(tr_key, *tr_values)
+
+    async def execute(
+        self,
+        key: K,
+        income: U_contra,
+        context: Context[S_co],
+    ) -> t.Optional[AsyncTransition[U_contra, S_co]]:
+        transitions = self.__transitions[key]
+
+        for transition in transitions:
+            ok = await transition.perform(income, context)
+            if ok:
+                return transition
+
+        return None
+
+    def add_transitions(self, key: K, *values: AsyncTransition[U_contra, S_co]) -> None:
         self.__transitions[key].extend(values)

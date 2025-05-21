@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import threading
 import typing as t
 
 from typing_extensions import ParamSpec, assert_never
 
-from statomata.abc import StateMachine
+from statomata.abc import AsyncStateMachineSubscriber, StateMachine
 from statomata.declarative.builder import MethodFunc, MethodOptions, State, get_method_options
 from statomata.declarative.registry import StateMachineRegistry
 from statomata.executor import AsyncStateMachineExecutor, StateMachineExecutor
-from statomata.subscriber.registry import StateMachineSubscriberRegistry
+from statomata.subscriber.registry import AsyncStateMachineSubscriberRegistry, StateMachineSubscriberRegistry
 from statomata.transition import (
+    AsyncTransitionExecutor,
     TransitionExecutor,
 )
 
@@ -25,7 +27,7 @@ V_co = t.TypeVar("V_co", covariant=True)
 S_sm = t.TypeVar("S_sm", bound=StateMachine[State])
 
 
-class Configurator:
+class BaseConfigurator:
     def registry(self, sm_class: type[S_sm]) -> StateMachineRegistry:
         states = dict[str, State]()
         methods = dict[MethodFunc, MethodOptions]()
@@ -46,41 +48,6 @@ class Configurator:
 
         return StateMachineRegistry(states, methods)
 
-    def create_lock(self) -> t.ContextManager[object]:
-        return threading.Lock()
-
-    def create_state_executor(
-        self,
-        initial: State,
-        fallback: t.Optional[t.Callable[[Exception], t.Optional[State]]] = None,
-        subscribers: t.Optional[t.Sequence[StateMachineSubscriber[State, S_sm, object]]] = None,
-        *,
-        is_async: bool = False,
-    ) -> t.Union[
-        AsyncStateMachineExecutor[State, S_sm, object],
-        StateMachineExecutor[State, S_sm, object],
-    ]:
-        return (
-            # AsyncStateMachineExecutor(
-            #     state=initial,
-            #     fallback=fallback,
-            #     subscriber=AsyncStateMachineSubscriberRegistry(*subscribers) if subscribers else None,
-            # )
-            # if is_async
-            # else
-            StateMachineExecutor(
-                state=initial,
-                fallback=fallback,
-                subscriber=StateMachineSubscriberRegistry(*subscribers) if subscribers else None,
-            )
-        )
-
-    def create_transition_executor(
-        self,
-        sm_class: type[S_sm],
-    ) -> TransitionExecutor[tuple[MethodFunc, State], S_sm, State]:
-        return TransitionExecutor()
-
     def build_fallback(
         self,
         state: State,
@@ -99,3 +66,51 @@ class Configurator:
 
         else:
             assert_never(state.fallback)
+
+
+class Configurator(BaseConfigurator):
+    def create_lock(self) -> t.ContextManager[object]:
+        return threading.Lock()
+
+    def create_state_executor(
+        self,
+        initial: State,
+        fallback: t.Optional[t.Callable[[Exception], t.Optional[State]]] = None,
+        subscribers: t.Optional[t.Sequence[StateMachineSubscriber[State, S_sm, object]]] = None,
+    ) -> StateMachineExecutor[State, S_sm, object]:
+        return StateMachineExecutor(
+            state=initial,
+            fallback=fallback,
+            subscriber=StateMachineSubscriberRegistry(*subscribers) if subscribers else None,
+        )
+
+    def create_transition_executor(
+        self,
+        # NOTE: python 3.9 doesn't support generic method syntax
+        sm_class: type[S_sm],  # noqa: ARG002
+    ) -> TransitionExecutor[tuple[MethodFunc, State], S_sm, State]:
+        return TransitionExecutor()
+
+
+class AsyncConfigurator(BaseConfigurator):
+    def create_lock(self) -> t.AsyncContextManager[object]:
+        return asyncio.Lock()
+
+    def create_state_executor(
+        self,
+        initial: State,
+        fallback: t.Optional[t.Callable[[Exception], t.Optional[State]]] = None,
+        subscribers: t.Optional[t.Sequence[AsyncStateMachineSubscriber[State, S_sm, object]]] = None,
+    ) -> AsyncStateMachineExecutor[State, S_sm, object]:
+        return AsyncStateMachineExecutor(
+            state=initial,
+            fallback=fallback,
+            subscriber=AsyncStateMachineSubscriberRegistry(*subscribers) if subscribers else None,
+        )
+
+    def create_transition_executor(
+        self,
+        # NOTE: python 3.9 doesn't support generic method syntax
+        sm_class: type[S_sm],  # noqa: ARG002
+    ) -> AsyncTransitionExecutor[tuple[MethodFunc, State], S_sm, State]:
+        return AsyncTransitionExecutor()

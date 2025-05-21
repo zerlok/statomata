@@ -11,7 +11,8 @@ V_contra = t.TypeVar("V_contra", contravariant=True)
 
 
 class StateMachineSubscriberRegistry(
-    t.Generic[S_contra, U_contra, V_contra], StateMachineSubscriber[S_contra, U_contra, V_contra]
+    t.Generic[S_contra, U_contra, V_contra],
+    StateMachineSubscriber[S_contra, U_contra, V_contra],
 ):
     def __init__(self, *subscribers: StateMachineSubscriber[S_contra, U_contra, V_contra]) -> None:
         self.__subscribers = set(subscribers)
