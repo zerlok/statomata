@@ -1,8 +1,7 @@
 import asyncio
 import typing as t
 
-from statomata.declarative import DeclarativeStateMachine, State
-from statomata.declarative.state_machine import AsyncDeclarativeStateMachine
+from statomata.declarative import AsyncDeclarativeStateMachine, DeclarativeStateMachine, State
 
 
 class OutcomeCases(DeclarativeStateMachine):

@@ -227,7 +227,7 @@ class DeclarativeStateMachine(StateMachine[State]):
 
         idempotent_state = options.idempotent.state
 
-        # NOTE: returns is used to return `V_co` value, see `IdempotentTransitionBuilder`
+        # NOTE: returns is used to return `V_co` value, see `IdempotentMethodBuilder`
         returns = t.cast(
             "t.Callable[[Self], V_co]",
             options.idempotent.returns if options.idempotent.returns is not None else _none,
@@ -425,7 +425,7 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
 
         idempotent_state = options.idempotent.state
 
-        # NOTE: returns is used to return `V_co` value, see `IdempotentTransitionBuilder`
+        # NOTE: returns is used to return `V_co` value, see `IdempotentMethodBuilder`
         returns = t.cast(
             "t.Callable[[Self], t.Awaitable[V_co]]",
             options.idempotent.returns if options.idempotent.returns is not None else _none_async,

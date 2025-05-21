@@ -1,4 +1,4 @@
-__all__ = ["DeclarativeStateMachine", "State"]
+__all__ = ["AsyncDeclarativeStateMachine", "DeclarativeStateMachine", "State"]
 
 from statomata.declarative.builder import State
-from statomata.declarative.state_machine import DeclarativeStateMachine
+from statomata.declarative.state_machine import AsyncDeclarativeStateMachine, DeclarativeStateMachine

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import abc
 import typing as t
 from collections import defaultdict
 from dataclasses import dataclass, field
-from functools import wraps
 
 from typing_extensions import ParamSpec, TypeAlias, override
 
@@ -108,7 +108,7 @@ class State:
         self.__check_not_frozen()
         return TernaryTransitionBuilder(self, condition)
 
-    def idempotent(self) -> IdempotentTransitionBuilder[None]:
+    def idempotent(self) -> IdempotentMethodBuilder[None]:
         """
         Build idempotent transition for a method.
 
@@ -116,7 +116,7 @@ class State:
         See `DeclarativeStateMachine` for mode details.
         """
         self.__check_not_frozen()
-        return IdempotentTransitionBuilder(self)
+        return IdempotentMethodBuilder(self)
 
     def freeze(self) -> None:
         """Freeze the state, denying any modifications."""
@@ -126,6 +126,265 @@ class State:
         if self.__frozen:
             msg = "can't modify frozen state"
             raise BuildError(msg, self)
+
+
+class ConditionBuilder(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def __invert__(self) -> ConditionBuilder:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def __and__(self, other: Operand) -> ConditionBuilder:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def __rand__(self, other: Operand) -> ConditionBuilder:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def __or__(self, other: Operand) -> ConditionBuilder:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def __ror__(self, other: Operand) -> ConditionBuilder:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def __xor__(self, other: Operand) -> ConditionBuilder:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def __rxor__(self, other: Operand) -> ConditionBuilder:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def build(self) -> Condition:
+        raise NotImplementedError
+
+
+Operand: TypeAlias = t.Union[Condition, ConditionBuilder]
+
+
+class EmptyConditionBuilder(ConditionBuilder):
+    def __init__(self, parent: TransitionBuilder) -> None:
+        self._parent = parent
+
+    @override
+    def __invert__(self) -> ConditionBuilder:
+        # TODO: should it be inverted or not?
+        raise NotImplementedError
+
+    @override
+    def __and__(self, other: Operand) -> ConditionBuilder:
+        return UnaryConditionBuilder(self._parent, other)
+
+    @override
+    def __rand__(self, other: Operand) -> ConditionBuilder:
+        return UnaryConditionBuilder(self._parent, other)
+
+    @override
+    def __or__(self, other: Operand) -> ConditionBuilder:
+        return UnaryConditionBuilder(self._parent, other)
+
+    @override
+    def __ror__(self, other: Operand) -> ConditionBuilder:
+        return UnaryConditionBuilder(self._parent, other)
+
+    @override
+    def __xor__(self, other: Operand) -> ConditionBuilder:
+        return UnaryConditionBuilder(self._parent, other)
+
+    @override
+    def __rxor__(self, other: Operand) -> ConditionBuilder:
+        return UnaryConditionBuilder(self._parent, other)
+
+    @override
+    def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
+        return self._parent(func)
+
+    @override
+    def build(self) -> Condition:
+        return _true
+
+
+class BaseConditionBuilder(ConditionBuilder):
+    def __init__(self, parent: TransitionBuilder) -> None:
+        self._parent = parent
+
+    @override
+    def __invert__(self) -> ConditionBuilder:
+        return NegateConditionBuilder(self._parent, self)
+
+    @override
+    def __and__(self, other: Operand) -> ConditionBuilder:
+        return AndConditionBuilder(self._parent, self, other)
+
+    @override
+    def __rand__(self, other: Operand) -> ConditionBuilder:
+        return AndConditionBuilder(self._parent, other, self)
+
+    @override
+    def __or__(self, other: Operand) -> ConditionBuilder:
+        return OrConditionBuilder(self._parent, self, other)
+
+    @override
+    def __ror__(self, other: Operand) -> ConditionBuilder:
+        return OrConditionBuilder(self._parent, other, self)
+
+    @override
+    def __xor__(self, other: Operand) -> ConditionBuilder:
+        return XorConditionBuilder(self._parent, self, other)
+
+    @override
+    def __rxor__(self, other: Operand) -> ConditionBuilder:
+        return XorConditionBuilder(self._parent, other, self)
+
+    @override
+    def __call__(self, func: t.Callable[P, V_co]) -> t.Callable[P, V_co]:
+        return self._parent.condition(self.build())(func)
+
+
+class UnaryConditionBuilder(BaseConditionBuilder):
+    def __init__(self, parent: TransitionBuilder, op: Operand) -> None:
+        super().__init__(parent)
+        self.__op = normalize_condition_operand(op)
+
+    @override
+    def build(self) -> Condition:
+        return self.__op
+
+
+class NegateConditionBuilder(BaseConditionBuilder):
+    def __init__(self, parent: TransitionBuilder, op: Operand) -> None:
+        super().__init__(parent)
+        self.__op = normalize_condition_operand(op)
+
+    @override
+    def build(self) -> Condition:
+        def check_negate(obj: object) -> bool:
+            return not self.__op(obj)
+
+        return check_negate
+
+
+class AndConditionBuilder(BaseConditionBuilder):
+    def __init__(self, parent: TransitionBuilder, left: Operand, right: Operand) -> None:
+        super().__init__(parent)
+        self.__left = normalize_condition_operand(left)
+        self.__right = normalize_condition_operand(right)
+
+    @override
+    def __and__(self, other: Operand) -> ConditionBuilder:
+        return AllConditionBuilder(self._parent, self.__left, self.__right, other)
+
+    @override
+    def __rand__(self, other: Operand) -> ConditionBuilder:
+        return AllConditionBuilder(self._parent, other, self.__left, self.__right)
+
+    @override
+    def build(self) -> Condition:
+        def check_and(obj: object) -> bool:
+            return self.__left(obj) and self.__right(obj)
+
+        return check_and
+
+
+class OrConditionBuilder(BaseConditionBuilder):
+    def __init__(self, parent: TransitionBuilder, left: Operand, right: Operand) -> None:
+        super().__init__(parent)
+        self.__left = normalize_condition_operand(left)
+        self.__right = normalize_condition_operand(right)
+
+    @override
+    def __or__(self, other: Operand) -> ConditionBuilder:
+        return AnyConditionBuilder(self._parent, self.__left, self.__right, other)
+
+    @override
+    def __ror__(self, other: Operand) -> ConditionBuilder:
+        return AnyConditionBuilder(self._parent, other, self.__left, self.__right)
+
+    @override
+    def build(self) -> Condition:
+        def check_or(obj: object) -> bool:
+            return self.__left(obj) or self.__right(obj)
+
+        return check_or
+
+
+class XorConditionBuilder(BaseConditionBuilder):
+    def __init__(self, parent: TransitionBuilder, left: Operand, right: Operand) -> None:
+        super().__init__(parent)
+        self.__left = normalize_condition_operand(left)
+        self.__right = normalize_condition_operand(right)
+
+    @override
+    def build(self) -> Condition:
+        def check_xor(obj: object) -> bool:
+            return self.__left(obj) ^ self.__right(obj)
+
+        return check_xor
+
+
+class AllConditionBuilder(BaseConditionBuilder):
+    def __init__(self, parent: TransitionBuilder, *operands: Operand) -> None:
+        super().__init__(parent)
+        self.__operands = normalize_condition_operands(operands)
+
+    @override
+    def __and__(self, other: Operand) -> ConditionBuilder:
+        self.__operands.append(normalize_condition_operand(other))
+        return self
+
+    @override
+    def __rand__(self, other: Operand) -> ConditionBuilder:
+        self.__operands.append(normalize_condition_operand(other))
+        return self
+
+    @override
+    def build(self) -> Condition:
+        if not self.__operands:
+            return _true
+
+        if len(self.__operands) == 1:
+            return self.__operands[0]
+
+        def check_all(obj: object) -> bool:
+            return all(op(obj) for op in self.__operands)
+
+        return check_all
+
+
+class AnyConditionBuilder(BaseConditionBuilder):
+    def __init__(self, parent: TransitionBuilder, *operands: Operand) -> None:
+        super().__init__(parent)
+        self.__operands = normalize_condition_operands(operands)
+
+    @override
+    def __or__(self, other: Operand) -> ConditionBuilder:
+        self.__operands.append(normalize_condition_operand(other))
+        return self
+
+    @override
+    def __ror__(self, other: Operand) -> ConditionBuilder:
+        self.__operands.append(normalize_condition_operand(other))
+        return self
+
+    @override
+    def build(self) -> Condition:
+        if not self.__operands:
+            return _false
+
+        if len(self.__operands) == 1:
+            return self.__operands[0]
+
+        def check_any(obj: object) -> bool:
+            return any(op(obj) for op in self.__operands)
+
+        return check_any
 
 
 class TransitionBuilder:
@@ -165,20 +424,18 @@ class TransitionBuilder:
         update_method_options(func, self.__source, self.__build())
         return func
 
-    def when(self, condition: Condition) -> TransitionBuilder:
+    def condition(self, condition: Condition) -> TransitionBuilder:
         """Set condition."""
         self.__condition = condition
         return self
 
-    def when_not(self, condition: Condition) -> TransitionBuilder:
-        """Set negative condition."""
-        func = normalize_condition(condition)
+    def when(self, *operands: Operand) -> ConditionBuilder:
+        """Build condition using `all` operator."""
+        return AllConditionBuilder(self, *operands)
 
-        @wraps(func)
-        def negate(obj: object) -> bool:
-            return not func(obj)
-
-        return self.when(negate)
+    def when_not(self, *operands: Operand) -> ConditionBuilder:
+        """Set negative condition over `all` operator."""
+        return ~self.when(*operands)
 
     def ternary(self, condition: Condition) -> TernaryTransitionBuilder:
         """Create ternary transition."""
@@ -252,11 +509,11 @@ class TernaryTransitionBuilder:
         return [MappingTransition(normalize_condition(self.__condition), {True: self.__then, False: self.__otherwise})]
 
 
-class IdempotentTransitionBuilder(t.Generic[V_co]):
+class IdempotentMethodBuilder(t.Generic[V_co]):
     """
-    Build the idempotent transition.
+    Build the idempotent method.
 
-    If state machine is in source state - the wrapped method won't be executed.
+    If state machine is in specified source state - the wrapped method won't be executed.
 
     If `returns` is specified - it will be executed in either way and its value will be returned as `outcome`.
     """
@@ -278,11 +535,11 @@ class IdempotentTransitionBuilder(t.Generic[V_co]):
             ),
         )
 
-        # NOTE: method will be replaced in `DeclarativeStateMachine`
+        # NOTE: method will be replaced in `DeclarativeStateMachine` / `AsyncDeclarativeStateMachine`
         return t.cast("t.Callable[P, V_co]", func)
 
-    def returns(self, returns: ValueGetter[W_co]) -> IdempotentTransitionBuilder[W_co]:
-        return IdempotentTransitionBuilder(self.__source, returns)
+    def returns(self, returns: ValueGetter[W_co]) -> IdempotentMethodBuilder[W_co]:
+        return IdempotentMethodBuilder(self.__source, returns)
 
 
 @dataclass()
@@ -344,3 +601,21 @@ def normalize_value_getter(getter: ValueGetter[V_co]) -> t.Callable[[object], V_
 def normalize_condition(condition: Condition) -> t.Callable[[object], bool]:
     # NOTE: we can assume that getter turns truthy value (to be used in `if` statement)
     return normalize_value_getter(condition)
+
+
+def normalize_condition_operand(operand: Operand) -> t.Callable[[object], bool]:
+    return (
+        normalize_condition(operand.build()) if isinstance(operand, ConditionBuilder) else normalize_condition(operand)
+    )
+
+
+def normalize_condition_operands(operands: t.Sequence[Operand]) -> t.MutableSequence[t.Callable[[object], bool]]:
+    return [normalize_condition_operand(op) for op in operands if not isinstance(op, EmptyConditionBuilder)]
+
+
+def _true(_: object, /) -> bool:
+    return True
+
+
+def _false(_: object, /) -> bool:
+    return False

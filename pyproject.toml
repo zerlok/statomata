@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "statomata"
-version = "0.2.0"
+version = "0.3.0"
 description = " a strictly typed, flexible library for building and running state machines in Python"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 license = "MIT"
