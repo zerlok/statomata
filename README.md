@@ -113,3 +113,4 @@ with suppress(InvalidStateError):
 * [traffic light](examples/state_machines/traffic_light_low_level.py)
 * [transition cases](examples/state_machines/transition_cases.py)
 * [outcome cases](examples/state_machines/outcome_cases.py)
+* [anyio cases](examples/state_machines/anyio_cases.py)

@@ -1,10 +1,30 @@
 [tool.poetry]
 name = "statomata"
-version = "0.3.0"
+version = "0.3.1"
 description = " a strictly typed, flexible library for building and running state machines in Python"
 authors = ["zerlok <danil.troshnev@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+keywords = [
+    "python",
+    "automata",
+    "fsm",
+    "asyncio",
+    "finite-state-machine",
+    "fsm-library"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
+
+[tool.poetry.urls]
+Homepage = "https://github.com/zerlok/statomata"
+Issues = "https://github.com/zerlok/statomata/issues"
+
 
 [tool.poetry.dependencies]
 python = "^3.9"
