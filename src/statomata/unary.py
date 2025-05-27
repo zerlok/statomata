@@ -119,10 +119,8 @@ class AsyncUnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncUnaryS
         return self.__executor.state
 
     async def run(self, /, income: U_contra) -> V_co:
-        # NOTE: support python 3.9
-        async with self.__lock:  # noqa: SIM117
-            async with self.__executor.visit_state(income) as context:
-                outcome = await self.current_state.handle(income, context)
-                await self.__executor.handle_outcome(income, outcome)
+        async with self.__lock, self.__executor.visit_state(income) as context:
+            outcome = await self.current_state.handle(income, context)
+            await self.__executor.handle_outcome(income, outcome)
 
-                return outcome
+            return outcome

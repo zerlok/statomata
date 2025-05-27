@@ -33,17 +33,15 @@ class AnyioStreamStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncItera
         return self.__executor.state
 
     async def run(self, receiver: ObjectReceiveStream[U_contra], sender: ObjectSendStream[V_co]) -> None:
-        async with self.__lock:
-            async with sender:
-                async with receiver:
-                    async for income in receiver:
-                        async with self.__executor.visit_state(income) as context:
-                            async for outcome in self.current_state.handle(income, context):
-                                await sender.send(outcome)
-                                await self.__executor.handle_outcome(income, outcome)
+        async with self.__lock, sender, receiver:
+            async for income in receiver:
+                async with self.__executor.visit_state(income) as context:
+                    async for outcome in self.current_state.handle(income, context):
+                        await sender.send(outcome)
+                        await self.__executor.handle_outcome(income, outcome)
 
-                        if self.__executor.is_aborted:
-                            break
+                if self.__executor.is_aborted:
+                    break
 
 
 def create_anyio_sm(

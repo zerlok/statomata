@@ -1,6 +1,7 @@
 import typing as t
 from dataclasses import dataclass
-from typing import assert_never, override
+
+from typing_extensions import assert_never, override
 
 from statomata.abc import Context
 from statomata.iterable import AsyncIterableState

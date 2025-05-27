@@ -106,10 +106,9 @@ async def send_inputs(streams: MemoryStreams, inputs: t.Sequence[StreamMessage])
 
 
 async def collect_outputs(streams: MemoryStreams) -> t.Sequence[str]:
-    outputs = list[str]()
+    outputs: list[str] = []
 
     async with streams.output_receive:
-        async for output in streams.output_receive:
-            outputs.append(output)
+        outputs.extend([output async for output in streams.output_receive])
 
     return outputs
