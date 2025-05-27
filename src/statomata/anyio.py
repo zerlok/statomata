@@ -5,8 +5,9 @@ import typing as t
 
 from typing_extensions import override
 
-from statomata.abc import StateMachine
+from statomata.abc import AsyncStateMachineSubscriber, StateMachine
 from statomata.iterable import AsyncIterableState
+from statomata.sdk import create_sm_async_executor
 
 if t.TYPE_CHECKING:
     from anyio.abc import ObjectReceiveStream, ObjectSendStream
@@ -33,11 +34,23 @@ class AnyioStreamStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncItera
 
     async def run(self, receiver: ObjectReceiveStream[U_contra], sender: ObjectSendStream[V_co]) -> None:
         async with self.__lock:
-            async for income in receiver:
-                async with self.__executor.visit_state(income) as context:
-                    async for outcome in self.current_state.handle(income, context):
-                        await sender.send(outcome)
-                        await self.__executor.handle_outcome(income, outcome)
+            async with sender:
+                async with receiver:
+                    async for income in receiver:
+                        async with self.__executor.visit_state(income) as context:
+                            async for outcome in self.current_state.handle(income, context):
+                                await sender.send(outcome)
+                                await self.__executor.handle_outcome(income, outcome)
 
-                if self.__executor.is_aborted:
-                    break
+                        if self.__executor.is_aborted:
+                            break
+
+
+def create_anyio_sm(
+    initial: AsyncIterableState[U_contra, V_co],
+    fallback: t.Optional[t.Callable[[Exception], t.Optional[AsyncIterableState[U_contra, V_co]]]] = None,
+    subscribers: t.Optional[
+        t.Sequence[AsyncStateMachineSubscriber[AsyncIterableState[U_contra, V_co], U_contra, V_co]]
+    ] = None,
+) -> AnyioStreamStateMachine[U_contra, V_co]:
+    return AnyioStreamStateMachine[U_contra, V_co](create_sm_async_executor(initial, fallback, subscribers))
