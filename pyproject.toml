@@ -33,8 +33,8 @@ typing-extensions = "^4.13.2" # TODO: find a way to avoid it in runtime
 
 
 [tool.poetry.group.dev.dependencies]
-mypy = "^1.15.0"
-ruff = "^0.11.9"
+mypy = "^1.16.0"
+ruff = "^0.11.12"
 pytest = "^8.3.5"
 pytest-asyncio = "^0.26.0"
 pytest-cov = "^6.1.0"
