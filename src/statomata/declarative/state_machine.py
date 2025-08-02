@@ -184,22 +184,18 @@ class DeclarativeStateMachine(StateMachine[State]):
 
             @wraps(func)
             def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> t.Iterable[V_co]:
-                with self.__provide_executor(iterfunc, sources) as (executor, context):
+                with self.__run(iterfunc, sources) as (executor, context):
                     for outcome in iterfunc(self, *args, **kwargs):
                         yield outcome
                         executor.handle_outcome(self, outcome)
-
-                    self.__transitions.execute((func, self.current_state), self, context)
 
         else:
 
             @wraps(func)
             def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> V_co:
-                with self.__provide_executor(func, sources) as (executor, context):
+                with self.__run(func, sources) as (executor, context):
                     outcome = func(self, *args, **kwargs)
                     executor.handle_outcome(self, outcome)
-
-                    self.__transitions.execute((func, self.current_state), self, context)
 
                     return outcome
 
@@ -258,7 +254,7 @@ class DeclarativeStateMachine(StateMachine[State]):
             return wrapper
 
     @t.overload
-    def __provide_executor(
+    def __run(
         self,
         # NOTE: python 3.9 doesn't support generic method syntax
         func: t.Callable[Concatenate[Self, P], t.Iterable[V_co]],
@@ -266,7 +262,7 @@ class DeclarativeStateMachine(StateMachine[State]):
     ) -> t.ContextManager[tuple[StateMachineExecutor[State, Self, V_co], Context[State]]]: ...
 
     @t.overload
-    def __provide_executor(
+    def __run(
         self,
         # NOTE: python 3.9 doesn't support generic method syntax
         func: t.Callable[Concatenate[Self, P], V_co],
@@ -274,10 +270,10 @@ class DeclarativeStateMachine(StateMachine[State]):
     ) -> t.ContextManager[tuple[StateMachineExecutor[State, Self, V_co], Context[State]]]: ...
 
     @contextmanager
-    def __provide_executor(
+    def __run(
         self,
         # NOTE: python 3.9 doesn't support generic method syntax
-        func: t.Union[  # noqa: ARG002
+        func: t.Union[
             t.Callable[Concatenate[Self, P], V_co],
             t.Callable[Concatenate[Self, P], t.Iterable[V_co]],
         ],
@@ -293,6 +289,8 @@ class DeclarativeStateMachine(StateMachine[State]):
 
             with self.__executor.visit_state(self) as context:
                 yield self.__executor, context
+
+                self.__transitions.execute((func, current_state), self, context)
 
 
 class AsyncDeclarativeStateMachine(StateMachine[State]):
@@ -395,12 +393,10 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
 
             @wraps(func)
             async def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> t.AsyncIterable[V_co]:
-                async with self.__provide_executor(iterfunc, sources) as (executor, context):
+                async with self.__run(iterfunc, sources) as (executor, context):
                     async for outcome in iterfunc(self, *args, **kwargs):
                         yield outcome
                         await executor.handle_outcome(self, outcome)
-
-                    await self.__transitions.execute((func, self.current_state), self, context)
 
             return wrapper
 
@@ -409,11 +405,9 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
 
             @wraps(func)
             async def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> V_co:
-                async with self.__provide_executor(func, sources) as (executor, context):
+                async with self.__run(func, sources) as (executor, context):
                     outcome = await afunc(self, *args, **kwargs)
                     await executor.handle_outcome(self, outcome)
-
-                    await self.__transitions.execute((func, self.current_state), self, context)
 
                     return outcome
 
@@ -483,7 +477,7 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
         return Sync2AsyncTransitionAdapter(transition)
 
     @t.overload
-    def __provide_executor(
+    def __run(
         self,
         # NOTE: python 3.9 doesn't support generic method syntax
         func: t.Callable[Concatenate[Self, P], t.Awaitable[V_co]],
@@ -491,7 +485,7 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
     ) -> t.AsyncContextManager[tuple[AsyncStateMachineExecutor[State, Self, V_co], Context[State]]]: ...
 
     @t.overload
-    def __provide_executor(
+    def __run(
         self,
         # NOTE: python 3.9 doesn't support generic method syntax
         func: t.Callable[Concatenate[Self, P], t.AsyncIterable[V_co]],
@@ -499,10 +493,10 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
     ) -> t.AsyncContextManager[tuple[AsyncStateMachineExecutor[State, Self, V_co], Context[State]]]: ...
 
     @asynccontextmanager
-    async def __provide_executor(
+    async def __run(
         self,
         # NOTE: python 3.9 doesn't support generic method syntax
-        func: t.Union[  # noqa: ARG002
+        func: t.Union[
             t.Callable[Concatenate[Self, P], t.Awaitable[V_co]],
             t.Callable[Concatenate[Self, P], t.AsyncIterable[V_co]],
         ],
@@ -518,6 +512,8 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
 
             async with self.__executor.visit_state(self) as context:
                 yield self.__executor, context
+
+                await self.__transitions.execute((func, current_state), self, context)
 
 
 def _none(_: object, /) -> None:

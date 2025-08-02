@@ -3,14 +3,26 @@ import typing as t
 from statomata.abc import AsyncStateMachineSubscriber, StateMachineSubscriber
 from statomata.executor import AsyncStateMachineExecutor, StateMachineExecutor
 from statomata.iterable import (
+    AsyncIterableOptStateMachine,
+    AsyncIterableSeqStateMachine,
     AsyncIterableState,
     AsyncIterableStateMachine,
     IterableOptStateMachine,
+    IterableSeqStateMachine,
     IterableState,
     IterableStateMachine,
 )
 from statomata.subscriber.registry import AsyncStateMachineSubscriberRegistry, StateMachineSubscriberRegistry
-from statomata.unary import AsyncUnaryState, AsyncUnaryStateMachine, UnaryOptState, UnaryState, UnaryStateMachine
+from statomata.unary import (
+    AsyncUnaryOptState,
+    AsyncUnarySeqState,
+    AsyncUnaryState,
+    AsyncUnaryStateMachine,
+    UnaryOptState,
+    UnarySeqState,
+    UnaryState,
+    UnaryStateMachine,
+)
 
 S_contra = t.TypeVar("S_contra", contravariant=True)
 U_contra = t.TypeVar("U_contra", contravariant=True)
@@ -79,3 +91,31 @@ def create_iterable_opt_sm(
     subscribers: t.Optional[t.Sequence[StateMachineSubscriber[UnaryOptState[U_contra, V_co], U_contra, V_co]]] = None,
 ) -> IterableOptStateMachine[U_contra, V_co]:
     return IterableOptStateMachine(create_sm_executor(initial, fallback, subscribers))
+
+
+def create_async_iterable_opt_sm(
+    initial: AsyncUnaryOptState[U_contra, V_co],
+    fallback: t.Optional[t.Callable[[Exception], t.Optional[AsyncUnaryOptState[U_contra, V_co]]]] = None,
+    subscribers: t.Optional[
+        t.Sequence[AsyncStateMachineSubscriber[AsyncUnaryOptState[U_contra, V_co], U_contra, V_co]]
+    ] = None,
+) -> AsyncIterableOptStateMachine[U_contra, V_co]:
+    return AsyncIterableOptStateMachine(create_sm_async_executor(initial, fallback, subscribers))
+
+
+def create_iterable_seq_sm(
+    initial: UnarySeqState[U_contra, V_co],
+    fallback: t.Optional[t.Callable[[Exception], t.Optional[UnarySeqState[U_contra, V_co]]]] = None,
+    subscribers: t.Optional[t.Sequence[StateMachineSubscriber[UnarySeqState[U_contra, V_co], U_contra, V_co]]] = None,
+) -> IterableSeqStateMachine[U_contra, V_co]:
+    return IterableSeqStateMachine(create_sm_executor(initial, fallback, subscribers))
+
+
+def create_async_iterable_seq_sm(
+    initial: AsyncUnarySeqState[U_contra, V_co],
+    fallback: t.Optional[t.Callable[[Exception], t.Optional[AsyncUnarySeqState[U_contra, V_co]]]] = None,
+    subscribers: t.Optional[
+        t.Sequence[AsyncStateMachineSubscriber[AsyncUnarySeqState[U_contra, V_co], U_contra, V_co]]
+    ] = None,
+) -> AsyncIterableSeqStateMachine[U_contra, V_co]:
+    return AsyncIterableSeqStateMachine(create_sm_async_executor(initial, fallback, subscribers))
