@@ -35,7 +35,7 @@ class BaseConfigurator:
         name: str
         obj: object
 
-        for name, obj in inspect.getmembers(sm_class):  # type: ignore[misc]
+        for name, obj in inspect.getmembers(sm_class):
             if isinstance(obj, State):
                 state_name = obj.name = obj.name or name
                 states[state_name] = obj

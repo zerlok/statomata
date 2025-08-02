@@ -65,6 +65,7 @@ ignore = [
     "RET505", # clashes with mypy exhaustiveness check
     "S101", # allow asserts for tests checks and mypy help
     "UP007", # because python 3.9 support
+    "UP045", # because python 3.9 support
 ]
 
 [tool.ruff.lint.per-file-ignores]
