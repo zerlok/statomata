@@ -84,7 +84,10 @@ async def run_machine(
     async with create_task_group() as tg:
         tg.start_soon(send_inputs, streams, inputs)
         tg.start_soon(sm.run, streams.input_receive, streams.output_send)
-        return await collect_outputs(streams)
+        outputs = await collect_outputs(streams)
+
+    # NOTE: mypy false-positive missing return statement, see: https://github.com/python/mypy/issues/19849
+    return outputs
 
 
 @pytest.fixture
