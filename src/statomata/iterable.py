@@ -134,8 +134,8 @@ class AsyncIterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
 
     async def run(self, /, incomes: t.AsyncIterable[U_contra]) -> t.AsyncIterable[V_co]:
         async with self.__lock:
-            async for income in incomes:
-                async with self.__executor.visit_state(income) as context:
+            async for item in incomes:
+                async for income, context in self.__executor.process(item):
                     outcome = await self.__executor.current_state.handle(income, context)
                     if outcome is not None:
                         yield outcome
