@@ -14,6 +14,7 @@ management logic.
 ## Features
 
 - 🧠 **State Interface & Context:** Follow the state machine OOP pattern with clear, isolated state definitions.
+- ⏸️ **Defer & Recall:** States can defer incoming messages and recall them later, enabling complex multi-step workflows.
 - ⚡ **Built-in Automata:** feel free to use one of the predefined automata classes from SDK (sync / async; unary /
   iterable)
 - 🏗 **Custom Automata Support:** Build your own automata with custom state management logic. You can choose declarative
@@ -111,6 +112,9 @@ with suppress(InvalidStateError):
     * [high level](examples/state_machines/order_control.py)
 * [positive number store](examples/state_machines/positive_number_store.py)
 * [traffic light](examples/state_machines/traffic_light_low_level.py)
+* [defer and recall](examples/state_machines/defer_recall_cases.py)
 * [transition cases](examples/state_machines/transition_cases.py)
+* [condition cases](examples/state_machines/condition_cases.py)
 * [outcome cases](examples/state_machines/outcome_cases.py)
+* [iterable low level](examples/state_machines/iterable_low_level.py)
 * [anyio cases](examples/state_machines/anyio_cases.py)

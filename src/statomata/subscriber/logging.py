@@ -12,23 +12,31 @@ class LoggingSubscriber(StateMachineSubscriber[object, object, object]):
 
     @override
     def notify_initial(self, state: object) -> None:
-        self.__log.info("started from %s", state)
+        self.__log.info("initial %s", state)
 
     @override
     def notify_state_entered(self, state: object, income: object) -> None:
-        self.__log.info("entered %s", state)
+        self.__log.info("entered %s %s", state, income)
+
+    @override
+    def notify_income_deferred(self, state: object, income: object) -> None:
+        self.__log.info("deferred %s %s", state, income)
+
+    @override
+    def notify_income_recalled(self, state: object, income: object) -> None:
+        self.__log.info("recalled %s %s", state, income)
 
     @override
     def notify_state_outcome(self, state: object, income: object, outcome: object) -> None:
-        self.__log.info("outcome %s", state)
+        self.__log.info("outcome %s %s %s", state, income, outcome)
 
     @override
     def notify_state_left(self, state: object, income: object) -> None:
-        self.__log.info("left %s", state)
+        self.__log.info("left %s %s", state, income)
 
     @override
     def notify_state_failed(self, state: object, error: Exception) -> None:
-        self.__log.info("failed %s", state)
+        self.__log.warning("failed %s", state, exc_info=error)
 
     @override
     def notify_transition(self, source: object, destination: object) -> None:
@@ -36,7 +44,7 @@ class LoggingSubscriber(StateMachineSubscriber[object, object, object]):
 
     @override
     def notify_final(self, state: object) -> None:
-        self.__log.info("finished at %s", state)
+        self.__log.info("final %s", state)
 
 
 class AsyncLoggingSubscriber(AsyncStateMachineSubscriber[object, object, object]):
@@ -45,23 +53,31 @@ class AsyncLoggingSubscriber(AsyncStateMachineSubscriber[object, object, object]
 
     @override
     async def notify_initial(self, state: object) -> None:
-        self.__log.info("started from %s", state)
+        self.__log.info("initial %s", state)
 
     @override
     async def notify_state_entered(self, state: object, income: object) -> None:
-        self.__log.info("entered %s", state)
+        self.__log.info("entered %s %s", state, income)
+
+    @override
+    async def notify_income_deferred(self, state: object, income: object) -> None:
+        self.__log.info("deferred %s %s", state, income)
+
+    @override
+    async def notify_income_recalled(self, state: object, income: object) -> None:
+        self.__log.info("recalled %s %s", state, income)
 
     @override
     async def notify_state_outcome(self, state: object, income: object, outcome: object) -> None:
-        self.__log.info("outcome %s", state)
+        self.__log.info("outcome %s %s %s", state, income, outcome)
 
     @override
     async def notify_state_left(self, state: object, income: object) -> None:
-        self.__log.info("left %s", state)
+        self.__log.info("left %s %s", state, income)
 
     @override
     async def notify_state_failed(self, state: object, error: Exception) -> None:
-        self.__log.info("failed %s", state)
+        self.__log.warning("failed %s", state, exc_info=error)
 
     @override
     async def notify_transition(self, source: object, destination: object) -> None:
@@ -69,4 +85,4 @@ class AsyncLoggingSubscriber(AsyncStateMachineSubscriber[object, object, object]
 
     @override
     async def notify_final(self, state: object) -> None:
-        self.__log.info("finished at %s", state)
+        self.__log.info("final %s", state)

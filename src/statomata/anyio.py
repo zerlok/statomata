@@ -30,13 +30,13 @@ class AnyioStreamStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncItera
     @property
     @override
     def current_state(self) -> AsyncIterableState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     async def run(self, receiver: ObjectReceiveStream[U_contra], sender: ObjectSendStream[V_co]) -> None:
         async with self.__lock, sender, receiver:
-            async for income in receiver:
-                async with self.__executor.visit_state(income) as context:
-                    async for outcome in self.current_state.handle(income, context):
+            async for item in receiver:
+                async for income, context in self.__executor.process(item):
+                    async for outcome in self.__executor.current_state.handle(income, context):
                         await sender.send(outcome)
                         await self.__executor.handle_outcome(income, outcome)
 

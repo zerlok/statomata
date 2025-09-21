@@ -86,6 +86,8 @@ async def run_machine(
         tg.start_soon(sm.run, streams.input_receive, streams.output_send)
         return await collect_outputs(streams)
 
+    return []
+
 
 @pytest.fixture
 def sm() -> AnyioStreamStateMachine[StreamMessage, str]:

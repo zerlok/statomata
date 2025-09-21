@@ -94,12 +94,17 @@ class UnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryState[U_con
     @property
     @override
     def current_state(self) -> UnaryState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     def run(self, /, income: U_contra) -> V_co:
-        with self.__lock, self.__executor.visit_state(income) as context:
-            outcome = self.current_state.handle(income, context)
-            self.__executor.handle_outcome(income, outcome)
+        with self.__lock:
+            with self.__executor.visit_state(income) as context:
+                outcome = self.current_state.handle(income, context)
+                self.__executor.handle_outcome(income, outcome)
+
+            for recalled, context in self.__executor.recall():
+                outcome = self.current_state.handle(recalled, context)
+                self.__executor.handle_outcome(recalled, outcome)
 
             return outcome
 
@@ -116,11 +121,16 @@ class AsyncUnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncUnaryS
     @property
     @override
     def current_state(self) -> AsyncUnaryState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     async def run(self, /, income: U_contra) -> V_co:
-        async with self.__lock, self.__executor.visit_state(income) as context:
-            outcome = await self.current_state.handle(income, context)
-            await self.__executor.handle_outcome(income, outcome)
+        async with self.__lock:
+            async with self.__executor.visit_state(income) as context:
+                outcome = await self.__executor.current_state.handle(income, context)
+                await self.__executor.handle_outcome(income, outcome)
+
+            async for recalled, context in self.__executor.recall():
+                outcome = await self.__executor.current_state.handle(recalled, context)
+                await self.__executor.handle_outcome(recalled, outcome)
 
             return outcome

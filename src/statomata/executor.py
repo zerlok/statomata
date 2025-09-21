@@ -1,88 +1,100 @@
 import typing as t
+from collections import deque
 from contextlib import asynccontextmanager, contextmanager
 
 from typing_extensions import override
 
-from statomata.abc import AsyncStateMachineSubscriber, Context, StateMachineSubscriber
+from statomata.abc import AsyncStateMachineSubscriber, Context, StateMachine, StateMachineSubscriber
 from statomata.exception import AbortedStateReachedError
 
 # FIXME: find a way to set a bound `State`
 S_state = t.TypeVar("S_state")
 U_contra = t.TypeVar("U_contra", contravariant=True)
 V_contra = t.TypeVar("V_contra", contravariant=True)
+V_co = t.TypeVar("V_co", covariant=True)
 
 
-class BaseStateMachineContext(t.Generic[S_state, U_contra, V_contra], Context[S_state]):
-    def __init__(
-        self,
-        state: S_state,
-        fallback: t.Optional[t.Callable[[Exception], t.Optional[S_state]]] = None,
-    ) -> None:
-        self.__state = state
-        self.__next_state: t.Optional[S_state] = None
-        self._fallback = fallback
+class ExecutorContext(t.Generic[S_state, U_contra, V_co], Context[S_state]):
+    def __init__(self, state: S_state) -> None:
+        self.source = state
+        self.destination: t.Optional[S_state] = None
 
-        self._initial = True
-        self._entered = False
-        self._aborted = False
+        self.initial = True
+        self.entered = False
+        self.deferred = False
+        self.recalled = False
+        self.aborted = False
 
     @override
-    def set_state(self, state: S_state, final: bool = False) -> None:
-        self.__next_state = state
-        self._aborted = final
+    def set_state(self, state: S_state, *, final: bool = False) -> None:
+        self.destination = state
+        self.recalled = False
+        self.aborted = final
+
+    @override
+    def defer(self) -> None:
+        self.deferred = True
+
+    @override
+    def recall(self) -> None:
+        self.recalled = True
 
     @override
     def abort(self) -> None:
-        self._aborted = True
+        self.aborted = True
 
     @property
-    def state(self) -> S_state:
-        return self.__state
+    def can_transit(self) -> bool:
+        return self.destination is not None and self.source is not self.destination
 
-    @property
-    def next_state(self) -> t.Optional[S_state]:
-        return self.__next_state
+    def transit(self) -> tuple[S_state, t.Optional[S_state]]:
+        if self.destination is None:
+            return self.source, None
 
-    @property
-    def is_going_to_transit(self) -> bool:
-        return self.__next_state is not None and self.__state is not self.__next_state
+        source, self.source, self.destination, self.entered = self.source, self.destination, None, False
 
-    @property
-    def is_initial_state(self) -> bool:
-        return self._initial
-
-    @property
-    def is_aborted(self) -> bool:
-        return self._aborted
-
-    def _check_aborted(self, income: U_contra) -> None:
-        if self._aborted:
-            raise AbortedStateReachedError(self.__state, income)
-
-    def _reset_state(self, next_state: t.Optional[S_state] = None) -> t.Optional[tuple[S_state, S_state]]:
-        if next_state is not None:
-            self.__next_state = next_state
-
-        if self.__next_state is None:
-            return None
-
-        source, self.__state, self.__next_state, self._entered = self.__state, self.__next_state, None, False
-
-        return source, self.__state
+        return source, self.source
 
 
-class StateMachineExecutor(
-    t.Generic[S_state, U_contra, V_contra],
-    BaseStateMachineContext[S_state, U_contra, V_contra],
-):
+class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], StateMachine[S_state]):
     def __init__(
         self,
         state: S_state,
         fallback: t.Optional[t.Callable[[Exception], t.Optional[S_state]]] = None,
         subscriber: t.Optional[StateMachineSubscriber[S_state, U_contra, V_contra]] = None,
+        pending: t.Optional[t.MutableSequence[U_contra]] = None,
     ) -> None:
-        super().__init__(state, fallback)
+        self.__context = ExecutorContext[S_state, U_contra, V_contra](state)
+        self.__fallback = fallback
         self.__subscriber = subscriber
+        self.__pending = pending if pending is not None else deque[U_contra]()
+
+    @override
+    @property
+    def current_state(self) -> S_state:
+        return self.__context.source
+
+    @property
+    def is_aborted(self) -> bool:
+        return self.__context.aborted
+
+    def process(self, income: U_contra) -> t.Iterable[tuple[U_contra, Context[S_state]]]:
+        if not self.is_aborted:
+            with self.visit_state(income) as context:
+                yield income, context
+
+        yield from self.recall()
+
+    def recall(self) -> t.Iterable[tuple[U_contra, Context[S_state]]]:
+        while not self.is_aborted and self.__context.recalled and self.__pending:
+            income = self.__pending.pop()
+            if self.__subscriber is not None:
+                self.__subscriber.notify_income_recalled(self.current_state, income)
+
+            self.__context.recalled = False
+
+            with self.visit_state(income) as context:
+                yield income, context
 
     @contextmanager
     def visit_state(self, income: U_contra) -> t.Iterator[Context[S_state]]:
@@ -98,65 +110,108 @@ class StateMachineExecutor(
             self.leave_state(income)
 
     def enter_state(self, income: U_contra) -> Context[S_state]:
-        self._check_aborted(income)
+        if self.is_aborted:
+            raise AbortedStateReachedError(self.current_state, income)
 
-        if self._initial:
+        if self.__context.initial:
             if self.__subscriber is not None:
-                self.__subscriber.notify_initial(self.state)
+                self.__subscriber.notify_initial(self.current_state)
 
-            self._initial = False
+            self.__context.initial = False
 
-        if not self._entered:
+        if not self.__context.entered:
             if self.__subscriber is not None:
-                self.__subscriber.notify_state_entered(self.state, income)
+                self.__subscriber.notify_state_entered(self.current_state, income)
 
-            self._entered = True
+            self.__context.entered = True
 
-        return self
+        return self.__context
 
     def handle_outcome(self, income: U_contra, outcome: V_contra) -> None:
         if self.__subscriber is not None:
-            self.__subscriber.notify_state_outcome(self.state, income, outcome)
+            self.__subscriber.notify_state_outcome(self.current_state, income, outcome)
 
     def leave_state(self, income: U_contra) -> None:
-        if self.is_going_to_transit and self.__subscriber is not None:
-            self.__subscriber.notify_state_left(self.state, income)
+        if self.__context.deferred:
+            self.__pending.append(income)
+            if self.__subscriber is not None:
+                self.__subscriber.notify_income_deferred(self.current_state, income)
+
+            self.__context.deferred = False
+
+        if self.__context.can_transit and self.__subscriber is not None:
+            self.__subscriber.notify_state_left(self.current_state, income)
 
         self.reset_state()
 
         if self.is_aborted and self.__subscriber is not None:
-            self.__subscriber.notify_final(self.state)
+            self.__subscriber.notify_final(self.current_state)
 
     def handle_state_error(self, err: Exception) -> bool:
         if self.__subscriber is not None:
-            self.__subscriber.notify_state_failed(self.state, err)
+            self.__subscriber.notify_state_failed(self.current_state, err)
 
-        if self._fallback is None:
+        if self.__fallback is None:
             return False
 
-        return self.reset_state(self._fallback(err))
+        fallback = self.__fallback(err)
+        if fallback is None:
+            return False
 
-    def reset_state(self, next_state: t.Optional[S_state] = None) -> bool:
-        transition = self._reset_state(next_state)
+        self.__context.set_state(fallback)
+        return self.reset_state()
 
-        if transition is not None and self.__subscriber is not None:
-            self.__subscriber.notify_transition(*transition)
+    def reset_state(self) -> bool:
+        if not self.__context.can_transit:
+            return False
 
-        return transition is not None
+        source, destination = self.__context.transit()
+        if destination is not None and self.__subscriber is not None:
+            self.__subscriber.notify_transition(source, destination)
+
+        return destination is not None
 
 
-class AsyncStateMachineExecutor(
-    t.Generic[S_state, U_contra, V_contra],
-    BaseStateMachineContext[S_state, U_contra, V_contra],
-):
+class AsyncStateMachineExecutor(t.Generic[S_state, U_contra, V_contra], StateMachine[S_state]):
     def __init__(
         self,
         state: S_state,
         fallback: t.Optional[t.Callable[[Exception], t.Optional[S_state]]] = None,
         subscriber: t.Optional[AsyncStateMachineSubscriber[S_state, U_contra, V_contra]] = None,
+        pending: t.Optional[t.MutableSequence[U_contra]] = None,
     ) -> None:
-        super().__init__(state, fallback)
+        self.__context = ExecutorContext[S_state, U_contra, V_contra](state)
+        self.__fallback = fallback
         self.__subscriber = subscriber
+        self.__pending = pending if pending is not None else deque[U_contra]()
+
+    @override
+    @property
+    def current_state(self) -> S_state:
+        return self.__context.source
+
+    @property
+    def is_aborted(self) -> bool:
+        return self.__context.aborted
+
+    async def process(self, income: U_contra) -> t.AsyncIterable[tuple[U_contra, Context[S_state]]]:
+        if not self.is_aborted:
+            async with self.visit_state(income) as context:
+                yield income, context
+
+        async for recalled, context in self.recall():
+            yield recalled, context
+
+    async def recall(self) -> t.AsyncIterable[tuple[U_contra, Context[S_state]]]:
+        while not self.is_aborted and self.__context.recalled and self.__pending:
+            income = self.__pending.pop()
+            if self.__subscriber is not None:
+                await self.__subscriber.notify_income_recalled(self.current_state, income)
+
+            self.__context.recalled = False
+
+            async with self.visit_state(income) as context:
+                yield income, context
 
     @asynccontextmanager
     async def visit_state(self, income: U_contra) -> t.AsyncIterator[Context[S_state]]:
@@ -172,48 +227,63 @@ class AsyncStateMachineExecutor(
             await self.leave_state(income)
 
     async def enter_state(self, income: U_contra) -> Context[S_state]:
-        self._check_aborted(income)
+        if self.is_aborted:
+            raise AbortedStateReachedError(self.current_state, income)
 
-        if self._initial:
+        if self.__context.initial:
             if self.__subscriber is not None:
-                await self.__subscriber.notify_initial(self.state)
+                await self.__subscriber.notify_initial(self.__context.source)
 
-            self._initial = False
+            self.__context.initial = False
 
-        if not self._entered:
+        if not self.__context.entered:
             if self.__subscriber is not None:
-                await self.__subscriber.notify_state_entered(self.state, income)
+                await self.__subscriber.notify_state_entered(self.__context.source, income)
 
-            self._entered = True
+            self.__context.entered = True
 
-        return self
+        return self.__context
 
     async def handle_outcome(self, income: U_contra, outcome: V_contra) -> None:
         if self.__subscriber is not None:
-            await self.__subscriber.notify_state_outcome(self.state, income, outcome)
+            await self.__subscriber.notify_state_outcome(self.__context.source, income, outcome)
 
     async def leave_state(self, income: U_contra) -> None:
-        if self.is_going_to_transit and self.__subscriber is not None:
-            await self.__subscriber.notify_state_left(self.state, income)
+        if self.__context.deferred:
+            self.__pending.append(income)
+            if self.__subscriber is not None:
+                await self.__subscriber.notify_income_deferred(self.current_state, income)
+
+            self.__context.deferred = False
+
+        if self.__context.can_transit and self.__subscriber is not None:
+            await self.__subscriber.notify_state_left(self.current_state, income)
 
         await self.reset_state()
 
         if self.is_aborted and self.__subscriber is not None:
-            await self.__subscriber.notify_final(self.state)
+            await self.__subscriber.notify_final(self.current_state)
 
     async def handle_state_error(self, err: Exception) -> bool:
         if self.__subscriber is not None:
-            await self.__subscriber.notify_state_failed(self.state, err)
+            await self.__subscriber.notify_state_failed(self.current_state, err)
 
-        if self._fallback is None:
+        if self.__fallback is None:
             return False
 
-        return await self.reset_state(self._fallback(err))
+        fallback = self.__fallback(err)
+        if fallback is None:
+            return False
 
-    async def reset_state(self, next_state: t.Optional[S_state] = None) -> bool:
-        transition = self._reset_state(next_state)
+        self.__context.set_state(fallback)
+        return await self.reset_state()
 
-        if transition is not None and self.__subscriber is not None:
-            await self.__subscriber.notify_transition(*transition)
+    async def reset_state(self) -> bool:
+        if not self.__context.can_transit:
+            return False
 
-        return transition is not None
+        source, destination = self.__context.transit()
+        if destination is not None and self.__subscriber is not None:
+            await self.__subscriber.notify_transition(source, destination)
+
+        return destination is not None

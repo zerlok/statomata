@@ -23,6 +23,14 @@ class SubscriberStub(StateMachineSubscriber[S_contra, U_contra, V_contra]):
         self.__events.append((state, "state_entered"))
 
     @override
+    def notify_income_deferred(self, state: S_contra, income: U_contra) -> None:
+        self.__events.append((state, "income_deferred"))
+
+    @override
+    def notify_income_recalled(self, state: S_contra, income: U_contra) -> None:
+        self.__events.append((state, "income_recalled"))
+
+    @override
     def notify_state_outcome(self, state: S_contra, income: U_contra, outcome: V_contra) -> None:
         self.__events.append((state, "state_outcome"))
 
@@ -64,6 +72,14 @@ class AsyncSubscriberStub(AsyncStateMachineSubscriber[S_contra, U_contra, V_cont
     @override
     async def notify_state_entered(self, state: S_contra, income: U_contra) -> None:
         self.__events.append((state, "state_entered"))
+
+    @override
+    async def notify_income_deferred(self, state: S_contra, income: U_contra) -> None:
+        self.__events.append((state, "income_deferred"))
+
+    @override
+    async def notify_income_recalled(self, state: S_contra, income: U_contra) -> None:
+        self.__events.append((state, "income_recalled"))
 
     @override
     async def notify_state_outcome(self, state: S_contra, income: U_contra, outcome: V_contra) -> None:
