@@ -34,6 +34,16 @@ class StateMachineSubscriberRegistry(
             sub.notify_state_entered(state, income)
 
     @override
+    def notify_income_deferred(self, state: S_contra, income: U_contra) -> None:
+        for sub in self.__subscribers:
+            sub.notify_income_deferred(state, income)
+
+    @override
+    def notify_income_recalled(self, state: S_contra, income: U_contra) -> None:
+        for sub in self.__subscribers:
+            sub.notify_income_recalled(state, income)
+
+    @override
     def notify_state_outcome(self, state: S_contra, income: U_contra, outcome: V_contra) -> None:
         for sub in self.__subscribers:
             sub.notify_state_outcome(state, income, outcome)
@@ -85,6 +95,20 @@ class AsyncStateMachineSubscriberRegistry(
             return
 
         await asyncio.gather(*(sub.notify_state_entered(state, income) for sub in self.__subscribers))
+
+    @override
+    async def notify_income_deferred(self, state: S_contra, income: U_contra) -> None:
+        if not self.__subscribers:
+            return
+
+        await asyncio.gather(*(sub.notify_income_deferred(state, income) for sub in self.__subscribers))
+
+    @override
+    async def notify_income_recalled(self, state: S_contra, income: U_contra) -> None:
+        if not self.__subscribers:
+            return
+
+        await asyncio.gather(*(sub.notify_income_recalled(state, income) for sub in self.__subscribers))
 
     @override
     async def notify_state_outcome(self, state: S_contra, income: U_contra, outcome: V_contra) -> None:

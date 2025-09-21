@@ -18,17 +18,47 @@ class Context(t.Generic[S_contra], metaclass=abc.ABCMeta):
     """
     A context for states to control the state machine.
 
-    Each `StateMachine` implementation must provide appropriate `Context` instance to `handle` method of `State`.
+    Each `StateMachine` implementation must provide a `Context` instance to the `handle` method of a `State`. The
+    context lets states manipulate execution flow: changing states, deferring incomes, recalling them later,
+    or aborting the machine.
     """
 
     @abc.abstractmethod
     def set_state(self, state: S_contra, *, final: bool = False) -> None:
-        """Change `StateMachine` state. If final is set - abort the context."""
+        """
+        Change the state machine to the given state.
+
+        :param state: the next state of the machine
+        :param final: if True, transition to the new state and then abort
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def defer(self) -> None:
+        """
+        Defer the currently handled income.
+
+        The income will be stored by the state machine for later recall.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def recall(self) -> None:
+        """
+        Recall one previously deferred income.
+
+        On the next step, the state machine will call the current state's `handle` method with that income (if
+        available).
+        """
         raise NotImplementedError
 
     @abc.abstractmethod
     def abort(self) -> None:
-        """Stop running the state machine. Means that the final state was reached."""
+        """
+        Abort the state machine run.
+
+        No further incomes will be processed after this call.
+        """
         raise NotImplementedError
 
 
@@ -80,6 +110,14 @@ class StateMachineSubscriber(t.Generic[S_contra, U_contra, V_contra], metaclass=
         raise NotImplementedError
 
     @abc.abstractmethod
+    def notify_income_deferred(self, state: S_contra, income: U_contra) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def notify_income_recalled(self, state: S_contra, income: U_contra) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def notify_state_outcome(self, state: S_contra, income: U_contra, outcome: V_contra) -> None:
         raise NotImplementedError
 
@@ -107,6 +145,14 @@ class AsyncStateMachineSubscriber(t.Generic[S_contra, U_contra, V_contra], metac
 
     @abc.abstractmethod
     async def notify_state_entered(self, state: S_contra, income: U_contra) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def notify_income_deferred(self, state: S_contra, income: U_contra) -> None:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def notify_income_recalled(self, state: S_contra, income: U_contra) -> None:
         raise NotImplementedError
 
     @abc.abstractmethod

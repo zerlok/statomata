@@ -51,13 +51,13 @@ class IterableStateMachine(t.Generic[U_contra, V_co], StateMachine[IterableState
     @property
     @override
     def current_state(self) -> IterableState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     def run(self, /, incomes: t.Iterable[U_contra]) -> t.Iterable[V_co]:
         with self.__lock:
-            for income in incomes:
-                with self.__executor.visit_state(income) as context:
-                    for outcome in self.current_state.handle(income, context):
+            for item in incomes:
+                for income, context in self.__executor.process(item):
+                    for outcome in self.__executor.current_state.handle(income, context):
                         yield outcome
                         self.__executor.handle_outcome(income, outcome)
 
@@ -77,13 +77,13 @@ class AsyncIterableStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncIte
     @property
     @override
     def current_state(self) -> AsyncIterableState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     async def run(self, /, incomes: t.AsyncIterable[U_contra]) -> t.AsyncIterable[V_co]:
         async with self.__lock:
-            async for income in incomes:
-                async with self.__executor.visit_state(income) as context:
-                    async for outcome in self.current_state.handle(income, context):
+            async for item in incomes:
+                async for income, context in self.__executor.process(item):
+                    async for outcome in self.__executor.current_state.handle(income, context):
                         yield outcome
                         await self.__executor.handle_outcome(income, outcome)
 
@@ -103,13 +103,13 @@ class IterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryOptSt
     @property
     @override
     def current_state(self) -> UnaryOptState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     def run(self, /, incomes: t.Iterable[U_contra]) -> t.Iterable[V_co]:
         with self.__lock:
-            for income in incomes:
-                with self.__executor.visit_state(income) as context:
-                    outcome = self.current_state.handle(income, context)
+            for item in incomes:
+                for income, context in self.__executor.process(item):
+                    outcome = self.__executor.current_state.handle(income, context)
                     if outcome is not None:
                         yield outcome
                         self.__executor.handle_outcome(income, outcome)
@@ -130,13 +130,13 @@ class AsyncIterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
     @property
     @override
     def current_state(self) -> AsyncUnaryOptState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     async def run(self, /, incomes: t.AsyncIterable[U_contra]) -> t.AsyncIterable[V_co]:
         async with self.__lock:
             async for income in incomes:
                 async with self.__executor.visit_state(income) as context:
-                    outcome = await self.current_state.handle(income, context)
+                    outcome = await self.__executor.current_state.handle(income, context)
                     if outcome is not None:
                         yield outcome
                         await self.__executor.handle_outcome(income, outcome)
@@ -157,13 +157,13 @@ class IterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[UnarySeqSt
     @property
     @override
     def current_state(self) -> UnarySeqState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     def run(self, /, incomes: t.Iterable[U_contra]) -> t.Iterable[V_co]:
         with self.__lock:
-            for income in incomes:
-                with self.__executor.visit_state(income) as context:
-                    outcomes = self.current_state.handle(income, context)
+            for item in incomes:
+                for income, context in self.__executor.process(item):
+                    outcomes = self.__executor.current_state.handle(income, context)
 
                     for outcome in outcomes:
                         yield outcome
@@ -185,13 +185,13 @@ class AsyncIterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
     @property
     @override
     def current_state(self) -> AsyncUnarySeqState[U_contra, V_co]:
-        return self.__executor.state
+        return self.__executor.current_state
 
     async def run(self, /, incomes: t.AsyncIterable[U_contra]) -> t.AsyncIterable[V_co]:
         async with self.__lock:
-            async for income in incomes:
-                async with self.__executor.visit_state(income) as context:
-                    outcomes = await self.current_state.handle(income, context)
+            async for item in incomes:
+                async for income, context in self.__executor.process(item):
+                    outcomes = await self.__executor.current_state.handle(income, context)
 
                     for outcome in outcomes:
                         yield outcome

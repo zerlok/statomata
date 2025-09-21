@@ -137,7 +137,7 @@ class DeclarativeStateMachine(StateMachine[State]):
     @override
     @property
     def current_state(self) -> State:
-        return self.__executor.state
+        return self.__executor.current_state
 
     @classmethod
     def state_machine_registry(cls) -> StateMachineRegistry:
@@ -337,7 +337,7 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
     @override
     @property
     def current_state(self) -> State:
-        return self.__executor.state
+        return self.__executor.current_state
 
     @classmethod
     def state_machine_registry(cls) -> StateMachineRegistry:
