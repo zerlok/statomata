@@ -28,7 +28,6 @@ class ExecutorContext(t.Generic[S_state, U_contra, V_co], Context[S_state]):
     @override
     def set_state(self, state: S_state, *, final: bool = False) -> None:
         self.destination = state
-        self.recalled = False
         self.aborted = final
 
     @override
