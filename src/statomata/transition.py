@@ -27,7 +27,7 @@ class AsyncTransition(t.Generic[U_contra, S_contra], metaclass=abc.ABCMeta):
         raise NotImplementedError
 
 
-class ConstantTransition(t.Generic[U_contra, S_contra], Transition[U_contra, S_contra]):
+class ConstantTransition(Transition[U_contra, S_contra], t.Generic[U_contra, S_contra]):
     def __init__(self, destination: S_contra) -> None:
         self.__destination = destination
 
@@ -45,7 +45,7 @@ class ConstantTransition(t.Generic[U_contra, S_contra], Transition[U_contra, S_c
         return True
 
 
-class ConditionalTransition(t.Generic[U_contra, S_contra], Transition[U_contra, S_contra]):
+class ConditionalTransition(Transition[U_contra, S_contra], t.Generic[U_contra, S_contra]):
     def __init__(
         self,
         condition: t.Callable[[U_contra], bool],
@@ -83,7 +83,7 @@ class ConditionalTransition(t.Generic[U_contra, S_contra], Transition[U_contra, 
         return False
 
 
-class MappingTransition(t.Generic[K, U_contra, S_contra], Transition[U_contra, S_contra]):
+class MappingTransition(Transition[U_contra, S_contra], t.Generic[K, U_contra, S_contra]):
     def __init__(
         self,
         key: t.Callable[[U_contra], K],
@@ -120,7 +120,7 @@ class MappingTransition(t.Generic[K, U_contra, S_contra], Transition[U_contra, S
         return False
 
 
-class Sync2AsyncTransitionAdapter(t.Generic[U_contra, S_contra], AsyncTransition[U_contra, S_contra]):
+class Sync2AsyncTransitionAdapter(AsyncTransition[U_contra, S_contra], t.Generic[U_contra, S_contra]):
     def __init__(self, inner: Transition[U_contra, S_contra]) -> None:
         self.__inner = inner
 

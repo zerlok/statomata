@@ -17,7 +17,7 @@ U_contra = t.TypeVar("U_contra", contravariant=True)
 V_co = t.TypeVar("V_co", covariant=True)
 
 
-class IterableState(t.Generic[U_contra, V_co], State[U_contra, t.Iterable[V_co]]):
+class IterableState(State[U_contra, t.Iterable[V_co]], t.Generic[U_contra, V_co]):
     """Interface for StateMachine state that handles one income and generates outcomes."""
 
     @abc.abstractmethod
@@ -26,7 +26,7 @@ class IterableState(t.Generic[U_contra, V_co], State[U_contra, t.Iterable[V_co]]
         raise NotImplementedError
 
 
-class AsyncIterableState(t.Generic[U_contra, V_co], State[U_contra, t.AsyncIterable[V_co]]):
+class AsyncIterableState(State[U_contra, t.AsyncIterable[V_co]], t.Generic[U_contra, V_co]):
     """Interface for asynchronous StateMachine state that handles one income and generates outcomes."""
 
     @abc.abstractmethod
@@ -39,7 +39,7 @@ class AsyncIterableState(t.Generic[U_contra, V_co], State[U_contra, t.AsyncItera
         raise NotImplementedError
 
 
-class IterableStateMachine(t.Generic[U_contra, V_co], StateMachine[IterableState[U_contra, V_co]]):
+class IterableStateMachine(StateMachine[IterableState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: StateMachineExecutor[IterableState[U_contra, V_co], U_contra, V_co],
@@ -65,7 +65,7 @@ class IterableStateMachine(t.Generic[U_contra, V_co], StateMachine[IterableState
                     break
 
 
-class AsyncIterableStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncIterableState[U_contra, V_co]]):
+class AsyncIterableStateMachine(StateMachine[AsyncIterableState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncIterableState[U_contra, V_co], U_contra, V_co],
@@ -91,7 +91,7 @@ class AsyncIterableStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncIte
                     break
 
 
-class IterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryOptState[U_contra, V_co]]):
+class IterableOptStateMachine(StateMachine[UnaryOptState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: StateMachineExecutor[UnaryOptState[U_contra, V_co], U_contra, V_co],
@@ -118,7 +118,7 @@ class IterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryOptSt
                     break
 
 
-class AsyncIterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncUnaryOptState[U_contra, V_co]]):
+class AsyncIterableOptStateMachine(StateMachine[AsyncUnaryOptState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncUnaryOptState[U_contra, V_co], U_contra, V_co],
@@ -145,7 +145,7 @@ class AsyncIterableOptStateMachine(t.Generic[U_contra, V_co], StateMachine[Async
                     break
 
 
-class IterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[UnarySeqState[U_contra, V_co]]):
+class IterableSeqStateMachine(StateMachine[UnarySeqState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: StateMachineExecutor[UnarySeqState[U_contra, V_co], U_contra, V_co],
@@ -173,7 +173,7 @@ class IterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[UnarySeqSt
                     break
 
 
-class AsyncIterableSeqStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncUnarySeqState[U_contra, V_co]]):
+class AsyncIterableSeqStateMachine(StateMachine[AsyncUnarySeqState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncUnarySeqState[U_contra, V_co], U_contra, V_co],

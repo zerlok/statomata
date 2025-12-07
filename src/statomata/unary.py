@@ -16,7 +16,7 @@ U_contra = t.TypeVar("U_contra", contravariant=True)
 V_co = t.TypeVar("V_co", covariant=True)
 
 
-class UnaryState(t.Generic[U_contra, V_co], State[U_contra, V_co]):
+class UnaryState(State[U_contra, V_co], t.Generic[U_contra, V_co]):
     """Interface for StateMachine state that handles one income and returns one outcome."""
 
     @abc.abstractmethod
@@ -25,7 +25,7 @@ class UnaryState(t.Generic[U_contra, V_co], State[U_contra, V_co]):
         raise NotImplementedError
 
 
-class AsyncUnaryState(t.Generic[U_contra, V_co], State[U_contra, t.Awaitable[V_co]]):
+class AsyncUnaryState(State[U_contra, t.Awaitable[V_co]], t.Generic[U_contra, V_co]):
     """Interface for asynchronous StateMachine state that handles one income and returns one outcome."""
 
     @abc.abstractmethod
@@ -34,7 +34,7 @@ class AsyncUnaryState(t.Generic[U_contra, V_co], State[U_contra, t.Awaitable[V_c
         raise NotImplementedError
 
 
-class UnaryOptState(t.Generic[U_contra, V_co], UnaryState[U_contra, t.Optional[V_co]]):
+class UnaryOptState(UnaryState[U_contra, t.Optional[V_co]], t.Generic[U_contra, V_co]):
     """Interface for StateMachine state that handles one income and may return one outcome."""
 
     @abc.abstractmethod
@@ -43,7 +43,7 @@ class UnaryOptState(t.Generic[U_contra, V_co], UnaryState[U_contra, t.Optional[V
         raise NotImplementedError
 
 
-class AsyncUnaryOptState(t.Generic[U_contra, V_co], AsyncUnaryState[U_contra, t.Optional[V_co]]):
+class AsyncUnaryOptState(AsyncUnaryState[U_contra, t.Optional[V_co]], t.Generic[U_contra, V_co]):
     """Interface for asynchronous StateMachine state that handles one income and may return one outcome."""
 
     @abc.abstractmethod
@@ -56,7 +56,7 @@ class AsyncUnaryOptState(t.Generic[U_contra, V_co], AsyncUnaryState[U_contra, t.
         raise NotImplementedError
 
 
-class UnarySeqState(t.Generic[U_contra, V_co], UnaryState[U_contra, t.Sequence[V_co]]):
+class UnarySeqState(UnaryState[U_contra, t.Sequence[V_co]], t.Generic[U_contra, V_co]):
     """Interface for StateMachine state that handles one income and returns outcome sequence."""
 
     @abc.abstractmethod
@@ -69,7 +69,7 @@ class UnarySeqState(t.Generic[U_contra, V_co], UnaryState[U_contra, t.Sequence[V
         raise NotImplementedError
 
 
-class AsyncUnarySeqState(t.Generic[U_contra, V_co], AsyncUnaryState[U_contra, t.Sequence[V_co]]):
+class AsyncUnarySeqState(AsyncUnaryState[U_contra, t.Sequence[V_co]], t.Generic[U_contra, V_co]):
     """Interface for asynchronous StateMachine state that handles one income and returns outcome sequence."""
 
     @abc.abstractmethod
@@ -82,7 +82,7 @@ class AsyncUnarySeqState(t.Generic[U_contra, V_co], AsyncUnaryState[U_contra, t.
         raise NotImplementedError
 
 
-class UnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryState[U_contra, V_co]]):
+class UnaryStateMachine(StateMachine[UnaryState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: StateMachineExecutor[UnaryState[U_contra, V_co], U_contra, V_co],
@@ -109,7 +109,7 @@ class UnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[UnaryState[U_con
             return outcome
 
 
-class AsyncUnaryStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncUnaryState[U_contra, V_co]]):
+class AsyncUnaryStateMachine(StateMachine[AsyncUnaryState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncUnaryState[U_contra, V_co], U_contra, V_co],

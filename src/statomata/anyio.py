@@ -18,7 +18,7 @@ U_contra = t.TypeVar("U_contra", contravariant=True)
 V_co = t.TypeVar("V_co", covariant=True)
 
 
-class AnyioStreamStateMachine(t.Generic[U_contra, V_co], StateMachine[AsyncIterableState[U_contra, V_co]]):
+class AnyioStreamStateMachine(StateMachine[AsyncIterableState[U_contra, V_co]], t.Generic[U_contra, V_co]):
     def __init__(
         self,
         executor: AsyncStateMachineExecutor[AsyncIterableState[U_contra, V_co], U_contra, V_co],

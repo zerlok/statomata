@@ -14,7 +14,7 @@ class StateMachineRuntimeError(StateMachineError, RuntimeError):
     """Raised when state machine run fails."""
 
 
-class InvalidStateError(t.Generic[S, T], StateMachineRuntimeError):
+class InvalidStateError(StateMachineRuntimeError, t.Generic[S, T]):
     """Raised when state machine has invalid state to handle the provided income."""
 
     def __init__(

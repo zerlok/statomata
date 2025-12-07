@@ -184,7 +184,7 @@ class DeclarativeStateMachine(StateMachine[State]):
 
             @wraps(func)
             def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> t.Iterable[V_co]:
-                with self.__run(iterfunc, sources) as (executor, context):
+                with self.__run(iterfunc, sources) as (executor, _):
                     for outcome in iterfunc(self, *args, **kwargs):
                         yield outcome
                         executor.handle_outcome(self, outcome)
@@ -193,7 +193,7 @@ class DeclarativeStateMachine(StateMachine[State]):
 
             @wraps(func)
             def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> V_co:
-                with self.__run(func, sources) as (executor, context):
+                with self.__run(func, sources) as (executor, _):
                     outcome = func(self, *args, **kwargs)
                     executor.handle_outcome(self, outcome)
 
@@ -393,7 +393,7 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
 
             @wraps(func)
             async def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> t.AsyncIterable[V_co]:
-                async with self.__run(iterfunc, sources) as (executor, context):
+                async with self.__run(iterfunc, sources) as (executor, _):
                     async for outcome in iterfunc(self, *args, **kwargs):
                         yield outcome
                         await executor.handle_outcome(self, outcome)
@@ -405,7 +405,7 @@ class AsyncDeclarativeStateMachine(StateMachine[State]):
 
             @wraps(func)
             async def wrapper(self: Self, /, *args: P.args, **kwargs: P.kwargs) -> V_co:
-                async with self.__run(func, sources) as (executor, context):
+                async with self.__run(func, sources) as (executor, _):
                     outcome = await afunc(self, *args, **kwargs)
                     await executor.handle_outcome(self, outcome)
 

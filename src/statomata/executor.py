@@ -14,7 +14,7 @@ V_contra = t.TypeVar("V_contra", contravariant=True)
 V_co = t.TypeVar("V_co", covariant=True)
 
 
-class ExecutorContext(t.Generic[S_state, U_contra, V_co], Context[S_state]):
+class ExecutorContext(Context[S_state], t.Generic[S_state, U_contra, V_co]):
     def __init__(self, state: S_state) -> None:
         self.source = state
         self.destination: t.Optional[S_state] = None
@@ -55,7 +55,7 @@ class ExecutorContext(t.Generic[S_state, U_contra, V_co], Context[S_state]):
         return source, self.source
 
 
-class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], StateMachine[S_state]):
+class StateMachineExecutor(StateMachine[S_state], t.Generic[S_state, U_contra, V_contra]):
     def __init__(
         self,
         state: S_state,
@@ -171,7 +171,7 @@ class StateMachineExecutor(t.Generic[S_state, U_contra, V_contra], StateMachine[
         return destination is not None
 
 
-class AsyncStateMachineExecutor(t.Generic[S_state, U_contra, V_contra], StateMachine[S_state]):
+class AsyncStateMachineExecutor(StateMachine[S_state], t.Generic[S_state, U_contra, V_contra]):
     def __init__(
         self,
         state: S_state,
