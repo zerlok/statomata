@@ -118,3 +118,28 @@ with suppress(InvalidStateError):
 * [outcome cases](examples/state_machines/outcome_cases.py)
 * [iterable low level](examples/state_machines/iterable_low_level.py)
 * [anyio cases](examples/state_machines/anyio_cases.py)
+
+## Project structure
+
+The library is layered: the declarative DSL and the low-level API both compile down to the same core.
+
+* `abc.py` — core interfaces: `State.handle(income, context)`, `Context` (`set_state` / `abort` / defer-recall), `StateMachine`, `StateMachineSubscriber`.
+* `executor.py` — engine that loops incomes through the current state and fans events out to subscribers (sync + async).
+* `unary.py` / `iterable.py` — state machine shells over the executor: unary is one-in/one-out, iterable is stream-in/stream-out.
+* `anyio.py` — async support via the optional `anyio` extra.
+* `sdk.py` — factory functions (`create_unary_sm`, `create_iterable_sm`, async counterparts) — the preferred low-level entry point.
+* `declarative/` — the high-level DSL built on top of the core.
+* `subscriber/` — reusable subscribers (logging, registry).
+
+## Development
+
+Install with `poetry install -E anyio`.
+
+Verify code changes in order:
+
+```bash
+poetry run ruff format
+poetry run ruff check
+poetry run mypy
+poetry run pytest
+```
